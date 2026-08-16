@@ -1,0 +1,8 @@
+{
+  "name": "Neon Rush: Infinite Runner",
+  "short_name": "NeonRush",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#070714",
+  "theme_color": "#00f0ff"
+}

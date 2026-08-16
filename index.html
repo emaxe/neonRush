@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Neon Rush: Infinite Runner</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="manifest" href="/manifest.json">
+  <script>
+    // Clean up any stale Service Workers from other projects running on this origin
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const registration of registrations) {
+          registration.unregister();
+        }
+      });
+    }
+  </script>
+</head>
+<body class="relative w-full h-full select-none overflow-hidden">
+
+  <!-- Main Game Canvas -->
+  <canvas id="gameCanvas" class="absolute inset-0 w-full h-full z-0 block"></canvas>
+  
+  <!-- Scanline Overlay for Cyberpunk Vibe -->
+  <div class="scanlines absolute inset-0 z-10 pointer-events-none opacity-40"></div>
+
+  <!-- UI CONTAINER -->
+  <div id="uiContainer" class="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between p-3 p-6">
+    
+    <!-- TOP HUD (In-Game) -->
+    <div id="gameHUD" class="hidden w-full flex flex-col gap-2 transition-opacity">
+      <div class="flex justify-between items-start w-full">
+        
+        <!-- Left Stats: Distance & Score & Combo -->
+        <div class="hud-stat-box flex flex-col gap-1 px-4 py-2 rounded-lg border shadow-lg" style="background: rgba(0,0,0,0.7); border: 1px solid rgba(0,240,255,0.4);">
+          <div class="flex items-center gap-3">
+            <div>
+              <span class="text-xs uppercase font-semibold tracking-wider block" style="color: #94a3b8;">Distance</span>
+              <div class="text-xl md:text-2xl font-black font-orbitron neon-text-cyan"><span id="hudDistance" class="hud-distance-val">0</span><span class="text-xs font-normal" style="color: #67e8f9; margin-left: 2px;">m</span></div>
+            </div>
+            <div style="height: 32px; width: 1px; background: rgba(0,240,255,0.3);"></div>
+            <div>
+              <span class="text-xs uppercase font-semibold tracking-wider block" style="color: #94a3b8;">Score</span>
+              <div class="text-xl md:text-2xl font-black font-orbitron text-white"><span id="hudScore" class="hud-score-val">0</span></div>
+            </div>
+            <div style="height: 32px; width: 1px; background: rgba(0,240,255,0.3);"></div>
+            <div class="flex flex-col items-center">
+              <span class="text-xs uppercase font-semibold tracking-wider block" style="color: #94a3b8;">Combo</span>
+              <div id="hudCombo" class="hud-combo-val text-lg font-bold font-orbitron px-2 py-0.5 rounded neon-text-pink" style="background: rgba(131,24,67,0.5); border: 1px solid #ff007f;">x1.0</div>
+            </div>
+          </div>
+          <!-- Biome Indicator -->
+          <div class="text-xs font-orbitron flex items-center gap-1.5" style="color: rgba(34,211,238,0.9); margin-top: 2px;">
+            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#22d3ee;"></span>
+            <span id="hudBiome">SECTOR: NEON CITY</span>
+          </div>
+        </div>
+
+        <!-- Center: Boss Health Bar -->
+        <div id="bossBarContainer" class="hidden flex-1 max-w-md mx-4 flex flex-col items-center p-2 rounded-lg" style="background: rgba(0,0,0,0.7); border: 1px solid rgba(239,68,68,0.6); box-shadow: 0 0 15px rgba(239,68,68,0.2);">
+          <div class="flex justify-between w-full text-xs font-orbitron font-bold mb-1" style="color: #f87171;">
+            <span id="bossName">BOSS: CYBER-DRONE MK-IV</span>
+            <span id="bossHpText" class="tabular-nums">100%</span>
+          </div>
+          <div class="w-full h-3.5 rounded-full overflow-hidden p-0.5" style="background: #111827; border: 1px solid rgba(239,68,68,0.4); height: 14px;">
+            <div id="bossHpBar" class="h-full rounded-full transition-all" style="width: 100%; height: 100%; background: linear-gradient(to right, #dc2626, #ec4899, #eab308);"></div>
+          </div>
+        </div>
+
+        <!-- Right Stats: Coins & Nitro & Pause -->
+        <div class="flex items-center gap-3">
+          <!-- Active Powerup Badges -->
+          <div id="hudPowerups" class="flex gap-2 items-center"></div>
+
+          <!-- Coins -->
+          <div class="flex items-center gap-2 px-3.5 py-2 rounded-lg" style="background: rgba(0,0,0,0.7); border: 1px solid rgba(234,179,8,0.4);">
+            <svg style="width: 20px; height: 20px; color: #facc15;" fill="currentColor" viewBox="0 0 20 20">
+              <circle cx="10" cy="10" r="8" stroke="#ffe600" stroke-width="2" fill="#ffd700"/>
+              <text x="10" y="14" font-size="11" font-weight="bold" fill="#000" text-anchor="middle">¢</text>
+            </svg>
+            <span id="hudCoins" class="hud-coins-val text-lg font-bold font-orbitron neon-text-yellow">0</span>
+          </div>
+
+          <!-- Pause Button -->
+          <button id="btnPause" class="pointer-events-auto cyber-btn px-3 py-2 text-sm flex items-center justify-center cursor-pointer">
+            <svg style="width: 20px; height: 20px;" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Nitro Gauge Bar -->
+      <div class="w-full max-w-xs flex items-center gap-2 px-3 py-1.5 rounded" style="background: rgba(0,0,0,0.55); border: 1px solid rgba(59,130,246,0.3);">
+        <span class="text-xs font-orbitron font-bold tracking-wider" style="color: #60a5fa;">NITRO</span>
+        <div class="flex-1 rounded-sm overflow-hidden" style="height: 10px; background: #0f172a; border: 1px solid rgba(59,130,246,0.4);">
+          <div id="hudNitroBar" class="h-full transition-all" style="width: 0%; height: 100%; background: linear-gradient(to right, #3b82f6, #22d3ee, #a5b4fc);"></div>
+        </div>
+        <span id="hudNitroReady" class="text-[10px] font-orbitron font-bold hidden" style="color: #67e8f9;">READY (F / DBL TAP)</span>
+      </div>
+    </div>
+
+    <!-- Center Alerts / Notifications -->
+    <div id="centerAlertContainer" class="flex flex-col items-center justify-center gap-3 w-full pointer-events-none" style="margin: auto 0;">
+      <!-- Boss Alert Banner -->
+      <div id="bossWarningBanner" class="hidden boss-warning-box px-8 py-4 rounded-xl border-2 text-center max-w-lg shadow-2xl">
+        <div class="font-orbitron font-black text-2xl tracking-widest uppercase flex items-center justify-center gap-2" style="color: #ef4444;">
+          <span>⚠️</span> WARNING: BOSS DETECTED <span>⚠️</span>
+        </div>
+        <div class="text-sm font-bold tracking-wider mt-1" style="color: #fecaca;" id="bossWarningSubtitle">TARGET: CYBER-DRONE MK-IV • EVADE & DESTROY</div>
+      </div>
+
+      <!-- Biome Shift Banner -->
+      <div id="biomeBanner" class="hidden px-8 py-3 rounded-lg text-center max-w-md shadow-2xl" style="background: rgba(0,0,0,0.85); border: 1px solid #22d3ee; backdrop-filter: blur(12px);">
+        <div class="text-xs uppercase tracking-widest font-semibold" style="color: #22d3ee;">ENTERING NEW SECTOR</div>
+        <div id="biomeBannerTitle" class="text-2xl font-black font-orbitron text-white neon-text-cyan">SECTOR 2: ORBITAL VOID</div>
+      </div>
+
+      <!-- Toast / Floating Text -->
+      <div id="toastNotification" class="hidden px-6 py-2.5 rounded-lg font-orbitron text-sm shadow-xl flex items-center gap-2" style="background: rgba(59,7,100,0.9); border: 1px solid #a855f7; color: #e9d5ff;">
+        <span style="color: #facc15; font-size: 1.125rem;">🏆</span>
+        <span id="toastText">Achievement Unlocked!</span>
+      </div>
+    </div>
+
+    <!-- BOTTOM MOBILE CONTROLS -->
+    <div id="mobileControls" class="w-full flex justify-between items-end pb-2 pt-4 px-2 pointer-events-auto select-none opacity-80 hover:opacity-100 transition-opacity">
+      <!-- Left side: Slide & Nitro -->
+      <div class="flex gap-4 items-end">
+        <button id="btnTouchSlide" class="touch-btn touch-btn-pink">
+          <span class="text-xs uppercase font-bold tracking-wider">Slide</span>
+          <svg style="width: 20px; height: 20px; margin-top: 2px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+        </button>
+        <button id="btnTouchNitro" class="touch-btn touch-btn-yellow">
+          <span class="text-[10px] uppercase font-bold tracking-wider">Nitro</span>
+          <span style="font-size: 1.125rem;">⚡</span>
+        </button>
+      </div>
+
+      <!-- Right side: Gravity Flip & Jump -->
+      <div class="flex gap-4 items-end">
+        <button id="btnTouchFlip" class="touch-btn">
+          <span class="text-[10px] uppercase font-bold tracking-wider">Gravity</span>
+          <svg style="width: 20px; height: 20px; margin-top: 2px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path></svg>
+        </button>
+        <button id="btnTouchJump" class="touch-btn" style="width: 80px; height: 80px; background: rgba(8,51,68,0.7); border-color: #22d3ee;">
+          <span class="text-xs uppercase font-bold tracking-wider font-orbitron">Jump</span>
+          <svg style="width: 24px; height: 24px; margin-top: 2px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODALS & SCREENS OVERLAY -->
+  <div id="screensContainer" class="absolute inset-0 z-30 flex items-center justify-center p-4" style="background: rgba(2,6,23,0.75); backdrop-filter: blur(6px);">
+    
+    <!-- 1. MAIN MENU -->
+    <div id="mainMenuScreen" class="cyber-panel p-6 p-8 max-w-xl w-full flex flex-col items-center text-center shadow-2xl relative">
+      <!-- Title & Subtitle -->
+      <div style="margin-bottom: 1.5rem;">
+        <h1 class="text-4xl md:text-6xl font-black font-orbitron tracking-wider text-transparent bg-clip-text bg-gradient-to-r drop-shadow-md">
+          NEON RUSH
+        </h1>
+        <div class="text-xs font-orbitron tracking-widest uppercase" style="color: #f472b6; margin-top: 0.25rem;">
+          ⚡ Cyberpunk Infinite Runner ⚡
+        </div>
+      </div>
+
+      <!-- High Score & Stats Bar -->
+      <div class="w-full grid grid-cols-3 gap-2 p-3 rounded-lg text-center" style="background: rgba(0,0,0,0.5); border: 1px solid rgba(0,240,255,0.3); margin-bottom: 1.5rem;">
+        <div>
+          <div class="text-[10px] uppercase font-semibold" style="color: #94a3b8;">High Score</div>
+          <div id="menuHighScore" class="text-base font-bold font-orbitron" style="color: #67e8f9;">0</div>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase font-semibold" style="color: #94a3b8;">Best Distance</div>
+          <div id="menuMaxDist" class="text-base font-bold font-orbitron" style="color: #f472b6;">0 m</div>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase font-semibold" style="color: #94a3b8;">Total Coins</div>
+          <div id="menuTotalCoins" class="text-base font-bold font-orbitron" style="color: #facc15;">0</div>
+        </div>
+      </div>
+
+      <!-- Menu Navigation Buttons -->
+      <div class="w-full flex flex-col gap-3">
+        <button id="btnPlay" class="cyber-btn py-3.5 px-6 text-lg font-bold tracking-widest flex items-center justify-center gap-3 w-full cursor-pointer">
+          <svg style="width: 24px; height: 24px;" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          LAUNCH RUN
+        </button>
+        
+        <div class="grid grid-cols-2 gap-3">
+          <button id="btnOpenShop" class="cyber-btn cyber-btn-pink py-2.5 px-4 text-sm font-semibold tracking-wider flex items-center justify-center gap-2 cursor-pointer">
+            🛒 CYBER SHOP
+          </button>
+          <button id="btnOpenUpgrades" class="cyber-btn cyber-btn-yellow py-2.5 px-4 text-sm font-semibold tracking-wider flex items-center justify-center gap-2 cursor-pointer">
+            ⚡ UPGRADES
+          </button>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <button id="btnOpenAchievements" class="cyber-btn py-2 px-2 text-xs tracking-wider cursor-pointer">
+            🏆 AWARDS
+          </button>
+          <button id="btnOpenQuests" class="cyber-btn py-2 px-2 text-xs tracking-wider cursor-pointer" style="color: #fde047; border-color: #facc15;">
+            📜 QUESTS
+          </button>
+          <button id="btnOpenSettings" class="cyber-btn py-2 px-2 text-xs tracking-wider cursor-pointer">
+            ⚙️ CONFIG
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Controls Reminder -->
+      <div class="text-[11px] flex flex-wrap justify-center gap-4" style="color: #94a3b8; margin-top: 1.5rem;">
+        <span><strong style="color: #67e8f9;">Space / ↑</strong>: Jump</span>
+        <span><strong style="color: #f472b6;">↓ / S</strong>: Slide</span>
+        <span><strong style="color: #c084fc;">Shift / G</strong>: Gravity Flip</span>
+        <span><strong style="color: #fde047;">Ctrl / F</strong>: Nitro</span>
+      </div>
+    </div>
+
+    <!-- 2. GAME OVER SCREEN -->
+    <div id="gameOverScreen" class="hidden cyber-panel p-6 p-8 max-w-lg w-full flex flex-col items-center text-center shadow-2xl">
+      <div class="font-orbitron font-black text-3xl tracking-widest uppercase mb-1" style="color: #ef4444;">
+        RUN TERMINATED
+      </div>
+      <div id="deathReason" class="text-xs font-orbitron" style="color: #fca5a5; margin-bottom: 1.25rem;">COLLISION DETECTED</div>
+
+      <!-- Summary Stats -->
+      <div class="w-full rounded-lg p-4 mb-6 flex flex-col gap-3 text-left" style="background: rgba(0,0,0,0.6); border: 1px solid rgba(0,240,255,0.4); margin-bottom: 1.5rem;">
+        <div class="flex justify-between items-center pb-2" style="border-bottom: 1px solid rgba(0,240,255,0.2);">
+          <span class="text-sm" style="color: #cbd5e1;">Final Distance:</span>
+          <span id="goDistance" class="font-orbitron font-bold text-lg" style="color: #67e8f9;">0 m</span>
+        </div>
+        <div class="flex justify-between items-center pb-2" style="border-bottom: 1px solid rgba(0,240,255,0.2);">
+          <span class="text-sm" style="color: #cbd5e1;">Final Score:</span>
+          <span id="goScore" class="font-orbitron font-bold text-xl text-white">0</span>
+        </div>
+        <div class="flex justify-between items-center pb-2" style="border-bottom: 1px solid rgba(0,240,255,0.2);">
+          <span class="text-sm" style="color: #cbd5e1;">Coins Collected:</span>
+          <span id="goCoins" class="font-orbitron font-bold text-lg" style="color: #facc15;">+0</span>
+        </div>
+        <div class="flex justify-between items-center pb-2" style="border-bottom: 1px solid rgba(0,240,255,0.2);">
+          <span class="text-sm" style="color: #cbd5e1;">Max Combo:</span>
+          <span id="goMaxCombo" class="font-orbitron font-bold text-lg" style="color: #f472b6;">x1.0</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-sm" style="color: #cbd5e1;">Bosses Defeated:</span>
+          <span id="goBosses" class="font-orbitron font-bold text-lg" style="color: #4ade80;">0</span>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="w-full flex flex-col gap-3">
+        <button id="btnRestart" class="cyber-btn py-3 px-6 text-lg font-bold tracking-wider flex items-center justify-center gap-2 w-full cursor-pointer">
+          ⚡ RUN AGAIN
+        </button>
+        <button id="btnGoMenu" class="cyber-btn cyber-btn-pink py-2.5 px-4 text-sm font-semibold tracking-wider w-full cursor-pointer">
+          MAIN MENU
+        </button>
+      </div>
+    </div>
+
+    <!-- 3. PAUSE MENU -->
+    <div id="pauseScreen" class="hidden cyber-panel p-6 max-w-sm w-full flex flex-col items-center text-center shadow-2xl">
+      <div class="text-2xl font-black font-orbitron tracking-wider" style="color: #22d3ee; margin-bottom: 1rem;">SYSTEM PAUSED</div>
+      <div class="w-full flex flex-col gap-3">
+        <button id="btnResume" class="cyber-btn py-3 text-base font-bold tracking-wider cursor-pointer">RESUME</button>
+        <button id="btnPauseSettings" class="cyber-btn py-2 text-sm tracking-wider cursor-pointer">SETTINGS</button>
+        <button id="btnQuitToMenu" class="cyber-btn cyber-btn-pink py-2 text-sm tracking-wider cursor-pointer">ABORT TO MENU</button>
+      </div>
+    </div>
+
+    <!-- 4. SHOP MODAL -->
+    <div id="shopScreen" class="hidden cyber-panel p-6 max-w-2xl w-full flex flex-col max-h-[90vh] shadow-2xl">
+      <div class="flex justify-between items-center pb-3 mb-4" style="border-bottom: 1px solid rgba(236,72,153,0.3);">
+        <div>
+          <h2 class="text-2xl font-black font-orbitron tracking-wider" style="color: #f472b6;">CYBER SHOP</h2>
+          <p class="text-xs" style="color: #94a3b8;">Unlock custom visual chassis & runner skins</p>
+        </div>
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded" style="background: rgba(0,0,0,0.6); border: 1px solid rgba(234,179,8,0.4);">
+          <span style="color: #facc15; font-weight: bold;">💰</span>
+          <span id="shopCoins" class="font-orbitron font-bold text-base" style="color: #fde047;">0</span>
+        </div>
+      </div>
+
+      <div id="skinListGrid" class="grid grid-cols-2 gap-3 overflow-y-auto flex-1 mb-4"></div>
+
+      <button id="btnCloseShop" class="cyber-btn cyber-btn-pink py-2.5 px-6 font-orbitron text-sm cursor-pointer" style="align-self: flex-end;">
+        BACK TO MENU
+      </button>
+    </div>
+
+    <!-- 5. UPGRADES MODAL -->
+    <div id="upgradesScreen" class="hidden cyber-panel p-6 max-w-2xl w-full flex flex-col max-h-[90vh] shadow-2xl">
+      <div class="flex justify-between items-center pb-3 mb-4" style="border-bottom: 1px solid rgba(234,179,8,0.3);">
+        <div>
+          <h2 class="text-2xl font-black font-orbitron tracking-wider" style="color: #facc15;">CYBERNETIC LAB</h2>
+          <p class="text-xs" style="color: #94a3b8;">Permanent augmentations & consumable boosts</p>
+        </div>
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded" style="background: rgba(0,0,0,0.6); border: 1px solid rgba(234,179,8,0.4);">
+          <span style="color: #facc15; font-weight: bold;">💰</span>
+          <span id="upgradeCoins" class="font-orbitron font-bold text-base" style="color: #fde047;">0</span>
+        </div>
+      </div>
+
+      <div id="upgradeListGrid" class="flex flex-col gap-3 overflow-y-auto flex-1 mb-4"></div>
+
+      <button id="btnCloseUpgrades" class="cyber-btn cyber-btn-yellow py-2.5 px-6 font-orbitron text-sm cursor-pointer" style="align-self: flex-end;">
+        BACK TO MENU
+      </button>
+    </div>
+
+    <!-- 6. ACHIEVEMENTS MODAL -->
+    <div id="achievementsScreen" class="hidden cyber-panel p-6 max-w-2xl w-full flex flex-col max-h-[90vh] shadow-2xl">
+      <div class="flex justify-between items-center pb-3 mb-4" style="border-bottom: 1px solid rgba(0,240,255,0.3);">
+        <div>
+          <h2 class="text-2xl font-black font-orbitron tracking-wider" style="color: #22d3ee;">NEO AWARDS</h2>
+          <p class="text-xs" style="color: #94a3b8;">Complete challenges to earn reward credits</p>
+        </div>
+        <div class="text-xs font-orbitron" style="color: #67e8f9;">
+          <span id="achProgressText">0 / 12</span> UNLOCKED
+        </div>
+      </div>
+
+      <div id="achievementsList" class="flex flex-col gap-2.5 overflow-y-auto flex-1 mb-4"></div>
+
+      <button id="btnCloseAchievements" class="cyber-btn py-2.5 px-6 font-orbitron text-sm cursor-pointer" style="align-self: flex-end;">
+        BACK TO MENU
+      </button>
+    </div>
+
+    <!-- 7. DAILY QUESTS MODAL -->
+    <div id="questsScreen" class="hidden cyber-panel p-6 max-w-lg w-full flex flex-col max-h-[90vh] shadow-2xl">
+      <div class="flex justify-between items-center pb-3 mb-4" style="border-bottom: 1px solid rgba(234,179,8,0.3);">
+        <div>
+          <h2 class="text-2xl font-black font-orbitron tracking-wider" style="color: #facc15;">DAILY DIRECTIVES</h2>
+          <p class="text-xs" style="color: #94a3b8;">Refreshes every 24 hours</p>
+        </div>
+        <span class="text-xs font-orbitron" style="color: #eab308;">TODAY</span>
+      </div>
+
+      <div id="questsList" class="flex flex-col gap-3 overflow-y-auto flex-1 mb-4"></div>
+
+      <button id="btnCloseQuests" class="cyber-btn cyber-btn-yellow py-2.5 px-6 font-orbitron text-sm cursor-pointer" style="align-self: flex-end;">
+        BACK TO MENU
+      </button>
+    </div>
+
+    <!-- 8. SETTINGS MODAL -->
+    <div id="settingsScreen" class="hidden cyber-panel p-6 max-w-md w-full flex flex-col shadow-2xl">
+      <h2 class="text-2xl font-black font-orbitron tracking-wider pb-3 mb-4" style="color: #22d3ee; border-bottom: 1px solid rgba(0,240,255,0.3);">
+        SETTINGS
+      </h2>
+
+      <div class="flex flex-col gap-4 mb-6">
+        <!-- Master Sound -->
+        <div class="flex justify-between items-center">
+          <span class="text-sm font-semibold">Sound FX Volume</span>
+          <input id="sliderSfx" type="range" min="0" max="1" step="0.05" value="0.8" style="width: 140px; accent-color: #22d3ee; cursor: pointer;">
+        </div>
+
+        <!-- Music Volume -->
+        <div class="flex justify-between items-center">
+          <span class="text-sm font-semibold">Synthwave Music</span>
+          <input id="sliderMusic" type="range" min="0" max="1" step="0.05" value="0.5" style="width: 140px; accent-color: #ec4899; cursor: pointer;">
+        </div>
+
+        <!-- Mobile Controls Toggle -->
+        <div class="flex justify-between items-center">
+          <span class="text-sm font-semibold">On-Screen Controls</span>
+          <input id="toggleMobileControls" type="checkbox" style="width: 20px; height: 20px; accent-color: #22d3ee; cursor: pointer;">
+        </div>
+
+        <!-- High Glow -->
+        <div class="flex justify-between items-center">
+          <span class="text-sm font-semibold">High Glow Effects</span>
+          <input id="toggleHighGlow" type="checkbox" checked style="width: 20px; height: 20px; accent-color: #22d3ee; cursor: pointer;">
+        </div>
+
+        <!-- Screen Shake -->
+        <div class="flex justify-between items-center">
+          <span class="text-sm font-semibold">Screen Shake Impact</span>
+          <input id="toggleScreenShake" type="checkbox" checked style="width: 20px; height: 20px; accent-color: #22d3ee; cursor: pointer;">
+        </div>
+
+        <!-- Reset Data Button -->
+        <div class="pt-2 flex justify-between items-center" style="border-top: 1px solid rgba(239,68,68,0.3);">
+          <span class="text-xs" style="color: #f87171;">Clear Saved Progress</span>
+          <button id="btnResetSave" class="px-3 py-1 text-xs font-orbitron rounded cursor-pointer" style="background: #450a0a; border: 1px solid #ef4444; color: #fca5a5;">
+            RESET ALL
+          </button>
+        </div>
+      </div>
+
+      <button id="btnCloseSettings" class="cyber-btn py-2.5 px-6 font-orbitron text-sm cursor-pointer" style="align-self: flex-end;">
+        CLOSE
+      </button>
+    </div>
+
+    <!-- 9. FIRST-TIME TUTORIAL POPUP -->
+    <div id="tutorialScreen" class="hidden cyber-panel p-6 max-w-lg w-full flex flex-col shadow-2xl text-center">
+      <div class="text-2xl font-black font-orbitron tracking-wider mb-2" style="color: #22d3ee;">RUNNER PROTOCOL: TUTORIAL</div>
+      <div class="text-xs mb-4" style="color: #cbd5e1;">Master these maneuvers to survive the Neon Megacity</div>
+      
+      <div class="grid grid-cols-2 gap-3 text-left text-xs p-4 rounded-lg mb-6" style="background: rgba(0,0,0,0.6); border: 1px solid rgba(0,240,255,0.3);">
+        <div class="flex items-start gap-2">
+          <span class="font-bold text-sm" style="color: #22d3ee;">▲</span>
+          <div>
+            <strong class="text-white block font-orbitron">JUMP / DBL JUMP</strong>
+            <span style="color: #94a3b8;">Space / Up / Swipe Up. Hold for higher leap. Press again in air for double jump.</span>
+          </div>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="font-bold text-sm" style="color: #f472b6;">▼</span>
+          <div>
+            <strong class="text-white block font-orbitron">SLIDE</strong>
+            <span style="color: #94a3b8;">Down / S / Swipe Down. Duck under high lasers & barriers.</span>
+          </div>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="font-bold text-sm" style="color: #c084fc;">⇅</span>
+          <div>
+            <strong class="text-white block font-orbitron">GRAVITY FLIP</strong>
+            <span style="color: #94a3b8;">Shift / G / Touch Button. Run upside down on ceilings to bypass ground hazards!</span>
+          </div>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="font-bold text-sm" style="color: #facc15;">⚡</span>
+          <div>
+            <strong class="text-white block font-orbitron">NITRO BOOST</strong>
+            <span style="color: #94a3b8;">Ctrl / F / Double Tap. Collect blue orbs to charge invulnerable hyper-dash.</span>
+          </div>
+        </div>
+      </div>
+
+      <button id="btnStartTutorial" class="cyber-btn py-3 px-8 font-orbitron text-base font-bold cursor-pointer" style="margin: 0 auto;">
+        INITIATE RUN
+      </button>
+    </div>
+
+  </div>
+
+  <!-- APPLICATION ENTRY -->
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

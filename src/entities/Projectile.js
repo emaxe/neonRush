@@ -55,17 +55,29 @@ export class Projectile extends Entity {
       ctx.ellipse(screenX, screenY, this.radius * 1.2, this.radius * 0.5, 0, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      // Spherical plasma orb with pulsating glow
-      ctx.lineWidth = 2;
+      // Spherical plasma orb with pulsating glow - high contrast
+      const pulse = 1 + Math.sin(performance.now() * 0.02) * 0.15;
+      const r = this.radius * pulse;
+
+      // Outer glow halo
+      ctx.shadowBlur = 20;
+      ctx.globalAlpha = 0.4;
       ctx.beginPath();
-      ctx.arc(screenX, screenY, this.radius, 0, Math.PI * 2);
+      ctx.arc(screenX, screenY, r * 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // Main orb
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, r, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
       // Inner hot core
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(screenX, screenY, this.radius * 0.5, 0, Math.PI * 2);
+      ctx.arc(screenX, screenY, r * 0.55, 0, Math.PI * 2);
       ctx.fill();
     }
 

@@ -19,6 +19,9 @@
 </head>
 <body class="relative w-full h-full select-none overflow-hidden">
 
+  <!-- GAME ROOT: оборачивает весь игровой контент для принудительного ландшафта на мобильных -->
+  <div id="gameRoot" class="absolute inset-0">
+
   <!-- Main Game Canvas -->
   <canvas id="gameCanvas" class="absolute inset-0 w-full h-full z-0 block"></canvas>
   
@@ -54,6 +57,7 @@
           <div class="text-xs font-orbitron flex items-center gap-1.5" style="color: rgba(34,211,238,0.9); margin-top: 2px;">
             <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#22d3ee;"></span>
             <span id="hudBiome">SECTOR: NEON CITY</span>
+            <span style="color: rgba(255,0,127,0.9); margin-left: 8px;">LVL <span id="hudLevel">1</span></span>
           </div>
         </div>
 
@@ -439,6 +443,8 @@
         INITIATE RUN
       </button>
     </div>
+
+  </div>
 
   </div>
 

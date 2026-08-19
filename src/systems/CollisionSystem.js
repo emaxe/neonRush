@@ -6,6 +6,8 @@ import { storageService } from '../services/StorageService.js';
  * CollisionSystem - Evaluates collisions between player, platforms, obstacles, collectibles, and projectiles.
  */
 export class CollisionSystem {
+  static _tempHitbox = { x: 0, y: 0, width: 0, height: 0 };
+
   /**
    * Axis-Aligned Bounding Box (AABB) overlap check
    * @param {{ x: number, y: number, width: number, height: number }} r1 
@@ -26,7 +28,7 @@ export class CollisionSystem {
    * @param {Object} context
    */
   static resolve(context) {
-    const { player, levelGen, boss, stats, camera, onPlayerDeath, onIncreaseCombo, onApplyPowerUp } = context;
+    const { player, levelGen, boss, stats, camera, onPlayerDeath, onIncreaseCombo, onApplyPowerUp, onQuestProgress } = context;
     const pHitbox = player.getHitbox();
     player.isGrounded = false;
 
@@ -107,19 +109,21 @@ export class CollisionSystem {
         }
 
         if (player.hasShield) {
-          player.hasShield = false;
+          player.shieldCharges--;
+          if (player.shieldCharges <= 0) player.hasShield = false;
           obs.active = false;
           levelGen.obstaclePool.release(obs);
           levelGen.obstacles.splice(i, 1);
           audioService.playHit();
           camera.shake(10, 0.3);
           particleSystem.spawnExplosion(player.x + player.width / 2, player.y + player.height / 2, '#00f0ff', 30);
-          particleSystem.spawnFloatingText(player.x, player.y, 'SHIELD BROKEN!', '#00f0ff', 18);
+          particleSystem.spawnFloatingText(player.x, player.y, player.hasShield ? `SHIELD ${player.shieldCharges}` : 'SHIELD BROKEN!', '#00f0ff', 18);
           stats.combo = 1.0;
           continue;
         }
 
         camera.shake(15, 0.5);
+        if (navigator.vibrate) { try { navigator.vibrate([60, 30, 60]); } catch (e) {} }
         onPlayerDeath(`HIT ${obs.type.toUpperCase()}`);
         return;
       }
@@ -135,9 +139,11 @@ export class CollisionSystem {
     // 3. Collectible Collisions
     for (let i = levelGen.collectibles.length - 1; i >= 0; i--) {
       const c = levelGen.collectibles[i];
-      const dist = Math.hypot((player.x + player.width / 2) - c.x, (player.y + player.height / 2) - c.y);
+      const dx = (player.x + player.width / 2) - c.x;
+      const dy = (player.y + player.height / 2) - c.y;
+      const rSum = player.width / 2 + c.radius;
 
-      if (dist < player.width / 2 + c.radius) {
+      if (dx * dx + dy * dy < rSum * rSum) {
         c.active = false;
         levelGen.collectiblePool.release(c);
         levelGen.collectibles.splice(i, 1);
@@ -151,7 +157,11 @@ export class CollisionSystem {
           player.nitroCharge = Math.min(100, player.nitroCharge + 2.5);
           audioService.playCoin(Math.floor(stats.combo));
           particleSystem.spawnSparks(c.x, c.y, '#ffe600', 6);
-          context.onQuestProgress?.('acc_coins', coinVal);
+          // Occasional confetti burst on coin pickup
+          if (Math.random() < 0.15) {
+            particleSystem.spawnConfetti(c.x, c.y, 12);
+          }
+          if (onQuestProgress) onQuestProgress('acc_coins', coinVal);
 
         } else if (c.type === 'nitro') {
           player.nitroCharge = 100;
@@ -196,7 +206,11 @@ export class CollisionSystem {
         for (let j = levelGen.obstacles.length - 1; j >= 0; j--) {
           const obs = levelGen.obstacles[j];
           if (obs.type === 'drone' || obs.type === 'patroller') {
-            if (this.checkAABB({ x: p.x - p.radius, y: p.y - p.radius, width: p.radius * 2, height: p.radius * 2 }, obs.getHitbox())) {
+            CollisionSystem._tempHitbox.x = p.x - p.radius;
+            CollisionSystem._tempHitbox.y = p.y - p.radius;
+            CollisionSystem._tempHitbox.width = p.radius * 2;
+            CollisionSystem._tempHitbox.height = p.radius * 2;
+            if (this.checkAABB(CollisionSystem._tempHitbox, obs.getHitbox())) {
               obs.hp--;
               if (obs.hp <= 0) {
                 obs.active = false;
@@ -215,10 +229,15 @@ export class CollisionSystem {
         }
       } else {
         // Enemy / Boss plasma hitting player
-        if (this.checkAABB(pHitbox, { x: p.x - p.radius, y: p.y - p.radius, width: p.radius * 2, height: p.radius * 2 })) {
-          if (player.isNitro || player.isGhost) continue;
+        if (player.isNitro || player.isGhost) continue;
+        CollisionSystem._tempHitbox.x = p.x - p.radius;
+        CollisionSystem._tempHitbox.y = p.y - p.radius;
+        CollisionSystem._tempHitbox.width = p.radius * 2;
+        CollisionSystem._tempHitbox.height = p.radius * 2;
+        if (this.checkAABB(pHitbox, CollisionSystem._tempHitbox)) {
           if (player.hasShield) {
-            player.hasShield = false;
+            player.shieldCharges--;
+            if (player.shieldCharges <= 0) player.hasShield = false;
             p.active = false;
             levelGen.projectilePool.release(p);
             levelGen.projectiles.splice(i, 1);

@@ -6,6 +6,8 @@ import { particleSystem } from '../systems/ParticleSystem.js';
 import { storageService } from '../services/StorageService.js';
 import { eventBus } from '../core/EventBus.js';
 
+const JUMP_BUFFER_TIME = 0.14;
+
 /**
  * Player Entity - Cyber-Runner with parkour mechanics, vertical gravity flip, dynamic shield, and skin rendering.
  */
@@ -21,6 +23,7 @@ export class Player extends Entity {
     this.isJumping = false;
     this.isFlipping = false;
     this.jumpHoldTimer = 0;
+    this.jumpBufferTimer = 0;
     this.gravityDir = 1; // 1 = floor downward, -1 = ceiling upward
     this.scaleY = 1; // 1 to -1 smooth vertical flip
     this.animTime = 0;
@@ -28,6 +31,7 @@ export class Player extends Entity {
     // Abilities & Roguelite state
     this.canDoubleJump = true;
     this.hasShield = false;
+    this.shieldCharges = 0; // сколько ударов может поглотить щит (уровень апгрейда)
     this.nitroCharge = 0; // 0 to 100
     this.isNitro = false;
     this.nitroTimer = 0;
@@ -60,6 +64,7 @@ export class Player extends Entity {
     this.isJumping = false;
     this.isFlipping = false;
     this.jumpHoldTimer = 0;
+    this.jumpBufferTimer = 0;
     this.gravityDir = 1;
     this.scaleY = 1;
     this.animTime = 0;
@@ -80,6 +85,8 @@ export class Player extends Entity {
     const currentSkinId = storageService.data?.selectedSkin || 'classic';
     this.skin = SKINS.find(s => s.id === currentSkinId) || SKINS[0];
     this.hasShield = (storageService.data?.upgrades?.shield || 0) > 0;
+    // Многоуровневый щит: число зарядов = уровень апгрейда (1/2/3 удара)
+    this.shieldCharges = storageService.data?.upgrades?.shield || 0;
   }
 
   getHitbox() {
@@ -87,19 +94,28 @@ export class Player extends Entity {
     const y = this.gravityDir === 1
       ? (this.isSliding ? this.y + (CONFIG.PLAYER_HEIGHT - CONFIG.PLAYER_SLIDE_HEIGHT) : this.y)
       : this.y;
-    return { x: this.x, y, width: this.width, height: h };
+    this._hitbox.x = this.x;
+    this._hitbox.y = y;
+    this._hitbox.width = this.width;
+    this._hitbox.height = h;
+    return this._hitbox;
+  }
+
+  executeJump() {
+    this.jumpBufferTimer = 0;
+    this.vy = CONFIG.JUMP_IMPULSE * this.gravityDir;
+    this.isGrounded = false;
+    this.isJumping = true;
+    this.jumpHoldTimer = 0;
+    this.canDoubleJump = true;
+    audioService.playJump();
+    particleSystem.spawnSparks(this.x + this.width / 2, this.gravityDir === 1 ? this.y + this.height : this.y, this.skin.trail, 8);
+    eventBus.emit('player_jump');
   }
 
   startJump() {
     if (this.isGrounded) {
-      this.vy = CONFIG.JUMP_IMPULSE * this.gravityDir;
-      this.isGrounded = false;
-      this.isJumping = true;
-      this.jumpHoldTimer = 0;
-      this.canDoubleJump = true;
-      audioService.playJump();
-      particleSystem.spawnSparks(this.x + this.width / 2, this.gravityDir === 1 ? this.y + this.height : this.y, this.skin.trail, 8);
-      eventBus.emit('player_jump');
+      this.executeJump();
     } else if (this.canDoubleJump) {
       this.vy = CONFIG.DOUBLE_JUMP_IMPULSE * this.gravityDir;
       this.canDoubleJump = false;
@@ -108,6 +124,8 @@ export class Player extends Entity {
       audioService.playDoubleJump();
       particleSystem.spawnExplosion(this.x + this.width / 2, this.y + this.height / 2, this.skin.trail, 14);
       eventBus.emit('player_jump');
+    } else {
+      this.jumpBufferTimer = JUMP_BUFFER_TIME;
     }
   }
 
@@ -119,6 +137,7 @@ export class Player extends Entity {
     // Forbid flipping gravity while in mid-air or when a flip is already underway
     if (!this.isGrounded || this.isFlipping) return;
 
+    this.jumpBufferTimer = 0;
     this.isFlipping = true;
     this.isGrounded = false;
     this.gravityDir *= -1;
@@ -140,6 +159,16 @@ export class Player extends Entity {
 
   update(dt, worldSpeed) {
     this.animTime += dt * (worldSpeed / 200);
+
+    // Jump buffering
+    if (this.jumpBufferTimer > 0) {
+      if (this.isGrounded) {
+        this.executeJump();
+      } else {
+        this.jumpBufferTimer -= dt;
+        if (this.jumpBufferTimer < 0) this.jumpBufferTimer = 0;
+      }
+    }
 
     // Nitro timer
     if (this.isNitro) {
@@ -172,9 +201,56 @@ export class Player extends Entity {
       particleSystem.spawnSparks(this.x + 10, sparkY, '#ff007f', 2);
     }
 
-    // Store trail snapshots
-    this.trailPositions.unshift({ x: this.x, y: this.y, scaleY: this.scaleY, sliding: this.isSliding });
-    if (this.trailPositions.length > 5) this.trailPositions.pop();
+    // Running dust puffs
+    if (this.isGrounded && !this.isSliding && Math.random() < 0.12) {
+      const dustY = this.gravityDir === 1 ? this.y + this.height : this.y;
+      particleSystem.emit(
+        this.x + 4, dustY,
+        -40 - Math.random() * 30, (this.gravityDir === 1 ? -1 : 1) * (10 + Math.random() * 20),
+        this.skin.trail, 2 + Math.random() * 2, 0.3 + Math.random() * 0.2, 'circle'
+      );
+    }
+
+    // Jetpack flame when airborne (jumping/falling)
+    if (!this.isGrounded && !this.isSliding) {
+      const flameX = this.x + this.width / 2;
+      const flameY = this.gravityDir === 1 ? this.y + this.height : this.y;
+      if (Math.random() < 0.5) {
+        particleSystem.emit(
+          flameX, flameY,
+          -20 + (Math.random() - 0.5) * 20,
+          (this.gravityDir === 1 ? 1 : -1) * (60 + Math.random() * 60),
+          this.isNitro ? '#ffe600' : this.skin.trail,
+          2 + Math.random() * 3, 0.2 + Math.random() * 0.15, 'circle'
+        );
+      }
+    }
+
+    // Nitro flame trail
+    if (this.isNitro && Math.random() < 0.6) {
+      const flameX = this.x + this.width / 2;
+      const flameY = this.gravityDir === 1 ? this.y + this.height : this.y;
+      particleSystem.emit(
+        flameX, flameY,
+        -80 - Math.random() * 60,
+        (this.gravityDir === 1 ? 1 : -1) * (30 + Math.random() * 40),
+        Math.random() > 0.5 ? '#ffe600' : '#ff007f',
+        3 + Math.random() * 3, 0.25 + Math.random() * 0.2, 'circle'
+      );
+    }
+
+    // Store trail snapshots (reuse objects to avoid GC in hot path)
+    let trailObj;
+    if (this.trailPositions.length >= 5) {
+      trailObj = this.trailPositions.pop();
+    } else {
+      trailObj = { x: 0, y: 0, scaleY: 1, sliding: false };
+    }
+    trailObj.x = this.x;
+    trailObj.y = this.y;
+    trailObj.scaleY = this.scaleY;
+    trailObj.sliding = this.isSliding;
+    this.trailPositions.unshift(trailObj);
 
     // Power-up timers
     if (this.magnetTimer > 0) this.magnetTimer -= dt;
@@ -200,7 +276,7 @@ export class Player extends Entity {
         const t = this.trailPositions[i];
         const tScreenX = t.x - cameraX;
         const tScreenY = t.y + cameraY;
-        const alpha = (1 - i / this.trailPositions.length) * (this.isNitro ? 0.6 : 0.25);
+        const alpha = (1 - i / this.trailPositions.length) * (this.isNitro ? 0.7 : 0.3);
         ctx.globalAlpha = alpha;
         this.renderRunnerFigure(ctx, tScreenX, tScreenY, t.scaleY, t.sliding, this.skin.trail, true);
       }

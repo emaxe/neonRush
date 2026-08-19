@@ -8,15 +8,16 @@ export class Entity {
     this.width = width;
     this.height = height;
     this.active = true;
+    // Переиспользуемый хитбокс — избегаем аллокаций в hot path (zero-GC)
+    this._hitbox = { x: 0, y: 0, width: 0, height: 0 };
   }
 
   getHitbox() {
-    return {
-      x: this.x,
-      y: this.y,
-      width: this.width,
-      height: this.height
-    };
+    this._hitbox.x = this.x;
+    this._hitbox.y = this.y;
+    this._hitbox.width = this.width;
+    this._hitbox.height = this.height;
+    return this._hitbox;
   }
 
   update(dt) {}

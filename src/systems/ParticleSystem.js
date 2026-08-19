@@ -11,6 +11,7 @@ export class ParticleSystem {
     this.cyberDebris = [];
     this.glitchTimer = 0;
     this.maxParticles = 300;
+    this._fontCache = new Map();
 
     this.pool = new ObjectPool(
       () => ({ x: 0, y: 0, vx: 0, vy: 0, color: '#fff', size: 3, life: 0, maxLife: 1, alpha: 1, shape: 'circle' }),
@@ -28,6 +29,24 @@ export class ParticleSystem {
         t.life = 0; t.maxLife = maxLife; t.size = size;
       },
       25
+    );
+
+    // Пулы для shockwaves и cyber debris — избегаем аллокаций при взрывах
+    this.shockwavePool = new ObjectPool(
+      () => ({ x: 0, y: 0, radius: 5, maxRadius: 160, color: '#00f0ff', life: 0, maxLife: 0.6 }),
+      (s, x, y, color, maxRadius, duration) => {
+        s.x = x; s.y = y; s.radius = 5; s.maxRadius = maxRadius;
+        s.color = color; s.life = 0; s.maxLife = duration;
+      },
+      8
+    );
+    this.debrisPool = new ObjectPool(
+      () => ({ x: 0, y: 0, vx: 0, vy: 0, rot: 0, vrot: 0, color: '#fff', w: 6, h: 4, life: 0, maxLife: 1 }),
+      (d, x, y, vx, vy, rot, vrot, color, w, h, maxLife) => {
+        d.x = x; d.y = y; d.vx = vx; d.vy = vy; d.rot = rot; d.vrot = vrot;
+        d.color = color; d.w = w; d.h = h; d.life = 0; d.maxLife = maxLife;
+      },
+      30
     );
   }
 
@@ -70,15 +89,46 @@ export class ParticleSystem {
     this.floatingTexts.push(this.textPool.get(x, y, text, color, size));
   }
 
+  /**
+   * Confetti burst (celebration effect)
+   */
+  spawnConfetti(x, y, count = 30) {
+    const colors = ['#00f0ff', '#ff007f', '#ffe600', '#00ff66', '#9d00ff', '#ffffff'];
+    for (let i = 0; i < count; i++) {
+      const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.2;
+      const speed = 120 + Math.random() * 220;
+      this.emit(
+        x, y,
+        Math.cos(angle) * speed,
+        Math.sin(angle) * speed,
+        colors[Math.floor(Math.random() * colors.length)],
+        3 + Math.random() * 4,
+        0.6 + Math.random() * 0.5,
+        Math.random() > 0.5 ? 'rect' : 'circle'
+      );
+    }
+  }
+
+  /**
+   * Speed lines for high-velocity moments
+   */
+  spawnSpeedLines(count = 12) {
+    for (let i = 0; i < count; i++) {
+      this.emit(
+        Math.random() * 1400,
+        Math.random() * 720,
+        -900 - Math.random() * 500,
+        0,
+        Math.random() > 0.5 ? '#00f0ff' : '#ff007f',
+        1.5 + Math.random() * 2,
+        0.15 + Math.random() * 0.2,
+        'line'
+      );
+    }
+  }
+
   spawnShockwave(x, y, color = '#00f0ff', maxRadius = 160, duration = 0.6) {
-    this.shockwaves.push({
-      x, y,
-      radius: 5,
-      maxRadius,
-      color,
-      life: 0,
-      maxLife: duration
-    });
+    this.shockwaves.push(this.shockwavePool.get(x, y, color, maxRadius, duration));
   }
 
   /**
@@ -99,18 +149,17 @@ export class ParticleSystem {
     for (let i = 0; i < 22; i++) {
       const angle = (Math.PI * 2 * i) / 22 + (Math.random() - 0.5) * 0.4;
       const speed = 120 + Math.random() * 380;
-      this.cyberDebris.push({
+      this.cyberDebris.push(this.debrisPool.get(
         x, y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 150, // pop upwards
-        rot: Math.random() * Math.PI * 2,
-        vrot: (Math.random() - 0.5) * 16,
-        color: shardColors[i % shardColors.length],
-        w: 6 + Math.random() * 12,
-        h: 4 + Math.random() * 10,
-        life: 0,
-        maxLife: 1.1 + Math.random() * 0.4
-      });
+        Math.cos(angle) * speed,
+        Math.sin(angle) * speed - 150, // pop upwards
+        Math.random() * Math.PI * 2,
+        (Math.random() - 0.5) * 16,
+        shardColors[i % shardColors.length],
+        6 + Math.random() * 12,
+        4 + Math.random() * 10,
+        1.1 + Math.random() * 0.4
+      ));
     }
 
     // 3. Dense Explosion & Voxel Sparks
@@ -134,7 +183,8 @@ export class ParticleSystem {
       p.life += dt;
       if (p.life >= p.maxLife) {
         this.pool.release(p);
-        this.particles.splice(i, 1);
+        this.particles[i] = this.particles[this.particles.length - 1];
+        this.particles.pop();
         continue;
       }
       p.x += p.vx * dt;
@@ -147,7 +197,9 @@ export class ParticleSystem {
       const sw = this.shockwaves[i];
       sw.life += dt;
       if (sw.life >= sw.maxLife) {
-        this.shockwaves.splice(i, 1);
+        this.shockwavePool.release(sw);
+        this.shockwaves[i] = this.shockwaves[this.shockwaves.length - 1];
+        this.shockwaves.pop();
         continue;
       }
       const progress = sw.life / sw.maxLife;
@@ -159,7 +211,9 @@ export class ParticleSystem {
       const d = this.cyberDebris[i];
       d.life += dt;
       if (d.life >= d.maxLife) {
-        this.cyberDebris.splice(i, 1);
+        this.debrisPool.release(d);
+        this.cyberDebris[i] = this.cyberDebris[this.cyberDebris.length - 1];
+        this.cyberDebris.pop();
         continue;
       }
       d.vy += 800 * dt; // Gravity
@@ -174,7 +228,8 @@ export class ParticleSystem {
       t.life += dt;
       if (t.life >= t.maxLife) {
         this.textPool.release(t);
-        this.floatingTexts.splice(i, 1);
+        this.floatingTexts[i] = this.floatingTexts[this.floatingTexts.length - 1];
+        this.floatingTexts.pop();
         continue;
       }
       t.y -= 45 * dt;
@@ -266,7 +321,12 @@ export class ParticleSystem {
       ctx.fillStyle = t.color;
       ctx.shadowColor = t.color;
       ctx.shadowBlur = 10;
-      ctx.font = `bold ${t.size}px Orbitron, sans-serif`;
+      let cached = this._fontCache.get(t.size);
+      if (!cached) {
+        cached = `bold ${t.size}px Orbitron, sans-serif`;
+        this._fontCache.set(t.size, cached);
+      }
+      ctx.font = cached;
       ctx.fillText(t.text, screenX, screenY);
     }
 
@@ -295,7 +355,9 @@ export class ParticleSystem {
     this.particles.length = 0;
     for (let i = 0; i < this.floatingTexts.length; i++) this.textPool.release(this.floatingTexts[i]);
     this.floatingTexts.length = 0;
+    for (let i = 0; i < this.shockwaves.length; i++) this.shockwavePool.release(this.shockwaves[i]);
     this.shockwaves.length = 0;
+    for (let i = 0; i < this.cyberDebris.length; i++) this.debrisPool.release(this.cyberDebris[i]);
     this.cyberDebris.length = 0;
     this.glitchTimer = 0;
   }

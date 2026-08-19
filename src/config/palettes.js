@@ -12,7 +12,11 @@ export const PALETTES = Object.freeze({
     platformStroke: '#00f0ff',
     hazardColor: '#ff007f',
     accentColor: '#ffe600',
-    skylineColors: ['#0d1130', '#151b46', '#221e54']
+    skylineColors: ['#0d1130', '#151b46', '#221e54'],
+    moonColor: '#ffe6a0',
+    moonGlow: 'rgba(255, 230, 160, 0.5)',
+    nebulaColors: ['rgba(0, 240, 255, 0.05)', 'rgba(255, 0, 127, 0.05)', 'rgba(157, 0, 255, 0.06)'],
+    decorColors: ['#1a2a5a', '#2a3a7a', '#3a4a9a']
   },
   void: {
     id: 'void',
@@ -24,7 +28,11 @@ export const PALETTES = Object.freeze({
     platformStroke: '#9d00ff',
     hazardColor: '#ffe600',
     accentColor: '#00ff66',
-    skylineColors: ['#1c0b36', '#2f0d5a', '#471485']
+    skylineColors: ['#1c0b36', '#2f0d5a', '#471485'],
+    moonColor: '#c9a0ff',
+    moonGlow: 'rgba(201, 160, 255, 0.5)',
+    nebulaColors: ['rgba(157, 0, 255, 0.07)', 'rgba(0, 255, 102, 0.04)', 'rgba(255, 0, 127, 0.05)'],
+    decorColors: ['#2a1050', '#3a1a6a', '#4a2a8a']
   },
   abyss: {
     id: 'abyss',
@@ -36,6 +44,10 @@ export const PALETTES = Object.freeze({
     platformStroke: '#00ffaa',
     hazardColor: '#ff0055',
     accentColor: '#00f0ff',
-    skylineColors: ['#062a32', '#0c424e', '#166474']
+    skylineColors: ['#062a32', '#0c424e', '#166474'],
+    moonColor: '#a0ffe6',
+    moonGlow: 'rgba(160, 255, 230, 0.5)',
+    nebulaColors: ['rgba(0, 255, 170, 0.05)', 'rgba(0, 240, 255, 0.05)', 'rgba(0, 255, 102, 0.04)'],
+    decorColors: ['#0a3a44', '#0e4e5a', '#166a7a']
   }
 });

@@ -49,6 +49,25 @@ export class Game {
     };
 
     this.nextBossDistance = CONFIG.BOSS_INTERVAL;
+    this.level = 1; // текущий уровень (растёт после каждого босса)
+    this.comboTimer = 0; // таймер спада комбо (сбрасывается при наборе)
+
+    this.handlePlayerDeathBound = (reason) => this.handlePlayerDeath(reason);
+    this.increaseComboBound = (amt) => this.increaseCombo(amt);
+    this.applyPowerUpBound = (subType) => this.applyPowerUp(subType);
+    this.onQuestProgressBound = (type, val) => questService.updateProgress(type, val);
+
+    this.collisionContext = {
+      player: this.player,
+      levelGen: this.levelGen,
+      boss: this.boss,
+      stats: this.stats,
+      camera: this.camera,
+      onPlayerDeath: this.handlePlayerDeathBound,
+      onIncreaseCombo: this.increaseComboBound,
+      onApplyPowerUp: this.applyPowerUpBound,
+      onQuestProgress: this.onQuestProgressBound
+    };
 
     this.bindSystemEvents();
     this.ui.showScreen(GameState.MENU);
@@ -66,9 +85,9 @@ export class Game {
       this.stats.bossesKilled++;
       this.stats.score += 5000 * this.stats.combo;
       this.stats.coins += 50;
-      this.nextBossDistance += CONFIG.BOSS_INTERVAL;
       this.camera.shake(12, 0.4);
       particleSystem.spawnFloatingText(pos.x, pos.y, 'BOSS DEFEATED! +5000', '#00ff66', 20);
+      particleSystem.spawnConfetti(pos.x, pos.y, 50);
 
       // Reward coin burst & shield
       for (let i = 0; i < 15; i++) {
@@ -83,6 +102,9 @@ export class Game {
       storageService.data.bossesDefeated = (storageService.data.bossesDefeated || 0) + 1;
       questService.updateProgress('boss_kill', 1);
       achievementService.check(this.stats);
+
+      // Новый уровень: снова долгий забег с препятствиями, затем следующий босс
+      this.startNextLevel();
     });
 
     eventBus.on('gravity_flipped', () => {
@@ -115,7 +137,9 @@ export class Game {
       biomeName: PALETTES.city.name,
       deathReason: 'COLLISION'
     };
+    this.collisionContext.stats = this.stats;
     this.nextBossDistance = CONFIG.BOSS_INTERVAL;
+    this.level = 1;
 
     this.levelGen.reset();
     this.player.reset(500);
@@ -125,6 +149,32 @@ export class Game {
     audioService.ensureContext();
     audioService.startMusic();
     this.ui.showScreen(GameState.PLAYING);
+  }
+
+  /**
+   * Переход на следующий уровень после убийства босса.
+   * Игрок продолжает бежать, но сложность растёт: скорость выше,
+   * препятствий больше, следующий босс ближе и сильнее.
+   */
+  startNextLevel() {
+    this.level++;
+    this.boss.active = false;
+
+    // Следующий босс — через уменьшенный интервал (но не меньше минимума)
+    const interval = Math.max(
+      CONFIG.LEVEL_MIN_BOSS_INTERVAL,
+      CONFIG.BOSS_INTERVAL - (this.level - 1) * CONFIG.LEVEL_BOSS_INTERVAL_DECREASE
+    );
+    this.nextBossDistance = this.stats.distance + interval;
+
+    // Очищаем снаряды босса, чтобы не остались после победы
+    this.levelGen.projectiles.forEach(p => this.levelGen.projectilePool.release(p));
+    this.levelGen.projectiles = [];
+
+    // Уведомление о новом уровне
+    particleSystem.spawnFloatingText(this.player.x + 200, 200, `LEVEL ${this.level}`, '#00f0ff', 28);
+    particleSystem.spawnFloatingText(this.player.x + 200, 260, 'SPEED UP!', '#ffe600', 18);
+    audioService.playPowerUp();
   }
 
   togglePause() {
@@ -195,8 +245,15 @@ export class Game {
     const effectiveDt = this.player.isSlowMo ? dt * 0.55 : dt;
     const player = this.player;
 
-    // Speed progression
-    const speedRamp = Math.min(CONFIG.PLAYER_MAX_SPEED, CONFIG.PLAYER_BASE_SPEED + (this.stats.distance * CONFIG.SPEED_ACCELERATION * 0.1));
+    // Speed progression (базовая скорость растёт с уровнем)
+    const levelSpeedBonus = Math.min(
+      CONFIG.LEVEL_MAX_SPEED_BONUS,
+      (this.level - 1) * CONFIG.LEVEL_SPEED_BONUS
+    );
+    const speedRamp = Math.min(
+      CONFIG.PLAYER_MAX_SPEED + levelSpeedBonus,
+      CONFIG.PLAYER_BASE_SPEED + levelSpeedBonus + (this.stats.distance * CONFIG.SPEED_ACCELERATION * 0.1)
+    );
     const currentSpeed = player.isNitro ? speedRamp * 1.65 : speedRamp;
     player.x += currentSpeed * effectiveDt;
 
@@ -207,7 +264,19 @@ export class Game {
 
     // Combat blaster firing
     player.shootCooldown -= effectiveDt;
-    const hasTargetAhead = this.boss.active || this.levelGen.obstacles.some(o => (o.type === 'drone' || o.type === 'patroller') && o.x > player.x && o.x < player.x + 650);
+    let hasTargetAhead = this.boss.active;
+    if (!hasTargetAhead) {
+      const obstacles = this.levelGen.obstacles;
+      const minX = player.x;
+      const maxX = player.x + 650;
+      for (let i = 0; i < obstacles.length; i++) {
+        const o = obstacles[i];
+        if ((o.type === 'drone' || o.type === 'patroller') && o.x > minX && o.x < maxX) {
+          hasTargetAhead = true;
+          break;
+        }
+      }
+    }
     if (player.shootCooldown <= 0 && hasTargetAhead) {
       player.shootCooldown = 0.28;
       const proj = this.levelGen.projectilePool.get();
@@ -223,53 +292,74 @@ export class Game {
 
     // Check Boss Spawn trigger
     if (this.stats.distance >= this.nextBossDistance && !this.boss.active) {
-      this.boss.spawn(player.x);
+      this.boss.spawn(player.x, this.level);
       eventBus.emit('boss_spawned', this.boss.name);
     }
 
     // Update Boss
     if (this.boss.active) {
-      this.boss.update(effectiveDt, player, this.levelGen);
+      this.boss.update(effectiveDt, player, this.levelGen, currentSpeed);
     }
 
     // Update Camera
     this.camera.update(effectiveDt, player.x);
 
     // Update Level Generation & Biomes
-    this.levelGen.updateGeneration(player.x, this.boss.active);
+    this.levelGen.updateGeneration(player.x, this.boss.active, this.level);
     this.stats.biomeName = this.levelGen.currentBiome.name;
 
     // Update Obstacles, Collectibles, Projectiles
-    this.levelGen.obstacles.forEach(o => o.update(effectiveDt));
-    this.levelGen.collectibles.forEach(c => c.update(effectiveDt, player));
-    this.levelGen.projectiles.forEach(p => p.update(effectiveDt));
+    const obstacles = this.levelGen.obstacles;
+    for (let i = 0; i < obstacles.length; i++) {
+      obstacles[i].update(effectiveDt);
+    }
+    const collectibles = this.levelGen.collectibles;
+    for (let i = 0; i < collectibles.length; i++) {
+      collectibles[i].update(effectiveDt, player);
+    }
+    const projectiles = this.levelGen.projectiles;
+    for (let i = 0; i < projectiles.length; i++) {
+      projectiles[i].update(effectiveDt);
+    }
 
     // Resolve Collisions
-    CollisionSystem.resolve({
-      player: this.player,
-      levelGen: this.levelGen,
-      boss: this.boss,
-      stats: this.stats,
-      camera: this.camera,
-      onPlayerDeath: (reason) => this.handlePlayerDeath(reason),
-      onIncreaseCombo: (amt) => this.increaseCombo(amt),
-      onApplyPowerUp: (subType) => this.applyPowerUp(subType),
-      onQuestProgress: (type, val) => questService.updateProgress(type, val)
-    });
+    CollisionSystem.resolve(this.collisionContext);
 
     // Update Particles
     particleSystem.update(effectiveDt);
 
+    // Speed lines at high velocity
+    if (currentSpeed > 600 && Math.random() < 0.3) {
+      particleSystem.spawnSpeedLines(3);
+    }
+    if (player.isNitro && Math.random() < 0.5) {
+      particleSystem.spawnSpeedLines(5);
+    }
+
     // Cleanup offscreen objects
     this.levelGen.cleanup(this.camera.x);
 
+    // Combo decay: если игрок не набирает комбо (монеты/near-miss) в течение
+    // COMBO_DECAY_TIME, множитель плавно спадает к 1.0
+    if (this.stats.combo > 1.0) {
+      this.comboTimer += effectiveDt;
+      if (this.comboTimer >= CONFIG.COMBO_DECAY_TIME) {
+        this.stats.combo = Math.max(1.0, this.stats.combo - CONFIG.COMBO_DECAY_RATE * effectiveDt);
+      }
+    }
+
     // Update HUD
-    this.ui.updateHUD(this.stats, player, this.boss);
+    this.ui.updateHUD(this.stats, player, this.boss, this.level);
   }
 
   applyPowerUp(subType) {
     if (subType === 'magnet') this.player.magnetTimer = CONFIG.MAGNET_DURATION;
-    else if (subType === 'shield') this.player.hasShield = true;
+    else if (subType === 'shield') {
+      // Shield capsule: восстанавливает один заряд (до уровня апгрейда)
+      const maxCharges = storageService.data?.upgrades?.shield || 1;
+      this.player.shieldCharges = Math.min(maxCharges, this.player.shieldCharges + 1);
+      this.player.hasShield = this.player.shieldCharges > 0;
+    }
     else if (subType === 'multiplier') this.player.multiplierTimer = CONFIG.MULTIPLIER_DURATION;
     else if (subType === 'slowmo') this.player.slowMoTimer = CONFIG.SLOWMO_DURATION;
     else if (subType === 'ghost') this.player.ghostTimer = CONFIG.GHOST_DURATION;
@@ -277,6 +367,7 @@ export class Game {
 
   increaseCombo(amount) {
     this.stats.combo = Math.min(10.0, this.stats.combo + amount);
+    this.comboTimer = 0; // сброс таймера спада при наборе комбо
     if (this.stats.combo > this.stats.maxCombo) {
       this.stats.maxCombo = this.stats.combo;
     }
@@ -295,6 +386,9 @@ export class Game {
 
     // 2. Track Platforms
     this.levelGen.drawPlatforms(ctx, camX, camY);
+
+    // 2b. Ambient decor props
+    this.levelGen.drawDecor(ctx, camX, camY);
 
     // 3. Obstacles
     for (let i = 0; i < this.levelGen.obstacles.length; i++) {

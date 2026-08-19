@@ -1,4 +1,5 @@
 import { Entity } from './Entity.js';
+import { CONFIG } from '../config/constants.js';
 import { audioService } from '../services/AudioService.js';
 import { particleSystem } from '../systems/ParticleSystem.js';
 import { eventBus } from '../core/EventBus.js';
@@ -9,32 +10,43 @@ import { eventBus } from '../core/EventBus.js';
 export class Boss extends Entity {
   constructor() {
     super(0, 300, 130, 95);
-    this.maxHp = 25;
-    this.hp = 25;
+    this.maxHp = 18;
+    this.hp = 18;
     this.active = false;
     this.animTime = 0;
     this.shootTimer = 0;
     this.laserAttackTimer = 0;
     this.isChargingLaser = false;
     this.name = 'CYBER-DRONE MK-IV';
+    this.phase = 1; // 1/2/3 — фазы боя (ускоряют атаки и меняют паттерны)
   }
 
-  spawn(playerX) {
+  spawn(playerX, level = 1) {
     this.x = playerX + 900;
     this.y = 280;
-    this.maxHp = 25 + Math.floor(playerX / 5000) * 10;
+    // HP растёт с уровнем и пройденной дистанцией (смягчённая прогрессия)
+    this.maxHp = 18 + Math.floor(playerX / 20000) * 4 + Math.round((level - 1) * CONFIG.LEVEL_BOSS_HP_BONUS * 0.7);
     this.hp = this.maxHp;
+    this.level = level;
     this.active = true;
     this.animTime = 0;
-    this.shootTimer = 1.2;
-    this.laserAttackTimer = 5.0;
+    this.shootTimer = 1.8;
+    this.laserAttackTimer = 6.0;
     this.isChargingLaser = false;
+    this.phase = 1;
     audioService.setBossMusic(true);
   }
 
-  update(dt, player, levelGen) {
+  update(dt, player, levelGen, currentSpeed) {
     if (!this.active) return;
     this.animTime += dt;
+
+    // Скорость атак растёт с уровнем (интервалы сокращаются)
+    const level = this.level || 1;
+    const attackSpeedBonus = 1 + (level - 1) * CONFIG.LEVEL_BOSS_SPEED_BONUS + (this.phase - 1) * 0.15;
+    // Актуальная скорость мира (передаётся из Game.update) — снаряды должны
+    // лететь быстрее, чем бежит игрок, на любом уровне разгона
+    const worldSpeed = currentSpeed || player.vx;
 
     // Follow player with leading offset
     const targetX = player.x + 640;
@@ -53,13 +65,13 @@ export class Boss extends Entity {
     // 1. Regular Attack: Twin Railgun Plasma Volleys
     this.shootTimer -= dt;
     if (this.shootTimer <= 0) {
-      this.shootTimer = 1.9;
+      this.shootTimer = 2.5 / attackSpeedBonus;
 
       const playerCenterX = player.x + player.width / 2;
       const playerCenterY = player.y + player.height / 2;
 
       // Projectile relative speed: must travel faster towards the left than the runner runs right
-      const projSpeed = player.vx + 280;
+      const projSpeed = worldSpeed + 200;
 
       // Top Gun
       const dy1 = playerCenterY - (this.y + 22);
@@ -102,11 +114,12 @@ export class Boss extends Entity {
 
     // Fire phase
     if (this.laserAttackTimer <= 0) {
-      this.laserAttackTimer = 6.0;
+      this.laserAttackTimer = 8.5 / attackSpeedBonus;
       this.isChargingLaser = false;
 
-      const heavySpeed = player.vx + 340;
-      const spreadAngles = [-140, 0, 140];
+      const heavySpeed = worldSpeed + 260;
+      // 5-снарядный веерный залп только на высоких уровнях (level >= 5) И в критической фазе (phase >= 3)
+      const spreadAngles = (level >= 5 && this.phase >= 3) ? [-140, -70, 0, 70, 140] : [-140, 0, 140];
 
       for (let i = 0; i < spreadAngles.length; i++) {
         const proj = levelGen.projectilePool.get();
@@ -123,6 +136,17 @@ export class Boss extends Entity {
   takeDamage(amount) {
     this.hp -= amount;
     particleSystem.spawnSparks(this.x, this.y + 45, '#00f0ff', 6);
+
+    // Смена фазы при потере HP (75% / 50% / 25% — ускоряет атаки)
+    const hpPct = this.hp / this.maxHp;
+    const newPhase = hpPct > 0.5 ? 1 : (hpPct > 0.25 ? 2 : 3);
+    if (newPhase !== this.phase) {
+      this.phase = newPhase;
+      particleSystem.spawnShockwave(this.x, this.y + this.height / 2, '#ff0055', 120, 0.5);
+      particleSystem.spawnFloatingText(this.x, this.y - 30, `PHASE ${this.phase}`, '#ff0055', 20);
+      audioService.playExplosion();
+    }
+
     if (this.hp <= 0) {
       this.defeat();
     }

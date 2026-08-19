@@ -42,9 +42,13 @@ export class UIManager {
     this.hudCombo = document.getElementById('hudCombo');
     this.hudCoins = document.getElementById('hudCoins');
     this.hudBiome = document.getElementById('hudBiome');
+    this.hudLevel = document.getElementById('hudLevel');
     this.hudNitroBar = document.getElementById('hudNitroBar');
     this.hudNitroReady = document.getElementById('hudNitroReady');
     this.hudPowerups = document.getElementById('hudPowerups');
+    // Кеш бейджей баффов: переиспользуем DOM-узлы, обновляя только время
+    this.powerupBadges = {};
+    this.resetHUDCache();
     this.bossBarContainer = document.getElementById('bossBarContainer');
     this.bossHpBar = document.getElementById('bossHpBar');
     this.bossHpText = document.getElementById('bossHpText');
@@ -230,6 +234,7 @@ export class UIManager {
     screens.forEach(s => s?.classList.add('hidden'));
 
     if (state === GameState.PLAYING) {
+      this.resetHUDCache();
       this.screensContainer.classList.add('hidden');
       this.gameHUD.classList.remove('hidden');
       this.updateMobileControlsVisibility();
@@ -262,6 +267,21 @@ export class UIManager {
     }
   }
 
+  resetHUDCache() {
+    this._hudCache = {
+      distance: -1,
+      score: -1,
+      combo: '',
+      coins: -1,
+      biome: '',
+      level: -1,
+      nitroPct: -1,
+      nitroReady: null,
+      bossActive: null,
+      bossHpPct: -1
+    };
+  }
+
   updateMenuStats() {
     const data = storageService.data;
     const menuHighScore = document.getElementById('menuHighScore');
@@ -273,51 +293,120 @@ export class UIManager {
     if (menuTotalCoins) menuTotalCoins.textContent = data.coins.toLocaleString();
   }
 
-  updateHUD(stats, player, boss) {
-    if (this.hudDistance) this.hudDistance.textContent = Math.floor(stats.distance).toLocaleString();
-    if (this.hudScore) this.hudScore.textContent = Math.floor(stats.score).toLocaleString();
-    if (this.hudCombo) this.hudCombo.textContent = `x${stats.combo.toFixed(1)}`;
-    if (this.hudCoins) this.hudCoins.textContent = stats.coins.toLocaleString();
-    if (this.hudBiome) this.hudBiome.textContent = `SECTOR: ${stats.biomeName}`;
+  updateHUD(stats, player, boss, level = 1) {
+    const cache = this._hudCache;
+
+    const dist = Math.floor(stats.distance);
+    if (dist !== cache.distance) {
+      cache.distance = dist;
+      if (this.hudDistance) this.hudDistance.textContent = dist;
+    }
+
+    const score = Math.floor(stats.score);
+    if (score !== cache.score) {
+      cache.score = score;
+      if (this.hudScore) this.hudScore.textContent = score;
+    }
+
+    const combo = stats.combo.toFixed(1);
+    if (combo !== cache.combo) {
+      cache.combo = combo;
+      if (this.hudCombo) this.hudCombo.textContent = `x${combo}`;
+    }
+
+    const coins = stats.coins;
+    if (coins !== cache.coins) {
+      cache.coins = coins;
+      if (this.hudCoins) this.hudCoins.textContent = coins;
+    }
+
+    const biome = stats.biomeName;
+    if (biome !== cache.biome) {
+      cache.biome = biome;
+      if (this.hudBiome) this.hudBiome.textContent = `SECTOR: ${biome}`;
+    }
+
+    if (level !== cache.level) {
+      cache.level = level;
+      if (this.hudLevel) this.hudLevel.textContent = level;
+    }
 
     // Nitro bar
-    if (this.hudNitroBar) {
-      this.hudNitroBar.style.width = `${Math.min(100, player.nitroCharge)}%`;
+    const nitroPct = Math.floor(Math.min(100, player.nitroCharge));
+    if (nitroPct !== cache.nitroPct) {
+      cache.nitroPct = nitroPct;
+      if (this.hudNitroBar) this.hudNitroBar.style.width = `${nitroPct}%`;
     }
-    if (this.hudNitroReady) {
-      this.hudNitroReady.classList.toggle('hidden', player.nitroCharge < 99);
+    const isNitroReady = player.nitroCharge >= 99;
+    if (isNitroReady !== cache.nitroReady) {
+      cache.nitroReady = isNitroReady;
+      if (this.hudNitroReady) this.hudNitroReady.classList.toggle('hidden', !isNitroReady);
     }
 
     // Boss bar
     if (this.bossBarContainer) {
+      if (boss.active !== cache.bossActive) {
+        cache.bossActive = boss.active;
+        this.bossBarContainer.classList.toggle('hidden', !boss.active);
+      }
       if (boss.active) {
-        this.bossBarContainer.classList.remove('hidden');
         const pct = Math.max(0, (boss.hp / boss.maxHp) * 100);
-        if (this.bossHpBar) this.bossHpBar.style.width = `${pct}%`;
-        if (this.bossHpText) this.bossHpText.textContent = `${Math.ceil(pct)}%`;
-      } else {
-        this.bossBarContainer.classList.add('hidden');
+        const ceilPct = Math.ceil(pct);
+        if (ceilPct !== cache.bossHpPct) {
+          cache.bossHpPct = ceilPct;
+          if (this.bossHpBar) this.bossHpBar.style.width = `${pct}%`;
+          if (this.bossHpText) this.bossHpText.textContent = `${ceilPct}%`;
+        }
       }
     }
 
-    // Active powerups badges
+    // Active powerups badges (zero allocations per frame, cached DOM nodes)
     if (this.hudPowerups) {
-      this.hudPowerups.innerHTML = '';
-      const buffs = [];
-      if (player.magnetTimer > 0) buffs.push({ icon: '🧲', color: '#9d00ff', time: player.magnetTimer });
-      if (player.hasShield) buffs.push({ icon: '🛡️', color: '#00f0ff', time: null });
-      if (player.multiplierTimer > 0) buffs.push({ icon: '2X', color: '#ff007f', time: player.multiplierTimer });
-      if (player.slowMoTimer > 0) buffs.push({ icon: '⏳', color: '#00ff66', time: player.slowMoTimer });
-      if (player.ghostTimer > 0) buffs.push({ icon: '👻', color: '#e2e8f0', time: player.ghostTimer });
+      this.updatePowerupBadge('magnet', '🧲', '#9d00ff', player.magnetTimer > 0, player.magnetTimer, '');
+      this.updatePowerupBadge('shield', '🛡️', '#00f0ff', player.hasShield, null, player.shieldCharges > 1 ? `x${player.shieldCharges}` : '');
+      this.updatePowerupBadge('multiplier', '2X', '#ff007f', player.multiplierTimer > 0, player.multiplierTimer, '');
+      this.updatePowerupBadge('slowmo', '⏳', '#00ff66', player.slowMoTimer > 0, player.slowMoTimer, '');
+      this.updatePowerupBadge('ghost', '👻', '#e2e8f0', player.ghostTimer > 0, player.ghostTimer, '');
+    }
+  }
 
-      buffs.forEach(b => {
-        const badge = document.createElement('div');
-        badge.className = 'px-2 py-1 rounded bg-black/70 border text-xs font-orbitron font-bold flex items-center gap-1 shadow-md';
-        badge.style.borderColor = b.color;
-        badge.style.color = b.color;
-        badge.innerHTML = `<span>${b.icon}</span>${b.time !== null ? `<span class="text-[10px] text-white">${Math.ceil(b.time)}s</span>` : ''}`;
-        this.hudPowerups.appendChild(badge);
-      });
+  updatePowerupBadge(key, icon, color, isActive, time, label) {
+    let badge = this.powerupBadges[key];
+    if (!isActive) {
+      if (badge) {
+        badge.el.remove();
+        delete this.powerupBadges[key];
+      }
+      return;
+    }
+
+    if (!badge) {
+      const el = document.createElement('div');
+      el.className = 'px-2 py-1 rounded bg-black/70 border text-xs font-orbitron font-bold flex items-center gap-1 shadow-md';
+      el.style.borderColor = color;
+      el.style.color = color;
+      el.innerHTML = `<span>${icon}</span><span class="text-[10px] text-white" data-time></span>`;
+      this.hudPowerups.appendChild(el);
+      badge = {
+        el,
+        timeEl: el.querySelector('[data-time]'),
+        lastText: '',
+        lastExpiring: null
+      };
+      this.powerupBadges[key] = badge;
+    }
+
+    const text = time !== null ? `${Math.ceil(time)}s` : (label || '');
+    if (badge.lastText !== text) {
+      badge.lastText = text;
+      if (badge.timeEl) badge.timeEl.textContent = text;
+    }
+
+    const expiring = time !== null && time < 1.5;
+    if (badge.lastExpiring !== expiring) {
+      badge.lastExpiring = expiring;
+      badge.el.classList.toggle('animate-pulse', expiring);
+      badge.el.style.opacity = expiring ? '0.6' : '1';
     }
   }
 

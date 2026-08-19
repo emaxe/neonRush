@@ -310,3 +310,88 @@ body, html {
 .text-transparent { color: transparent; }
 .bg-clip-text { -webkit-background-clip: text; background-clip: text; }
 .bg-gradient-to-r { background-image: linear-gradient(to right, var(--neon-cyan), var(--neon-pink), var(--neon-yellow)); }
+
+/* ============================================================
+   FORCED LANDSCAPE (Mobile)
+   На мобильных (портрет) поворачиваем весь игровой контейнер
+   на 90° и растягиваем на всю площадь экрана.
+   ============================================================ */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #05060f;
+}
+
+/* Контейнер-обёртка: по умолчанию занимает весь экран */
+#gameRoot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: center center;
+  /* Блокирует системные жесты (pull-to-refresh, свайпы браузера) на игровой зоне */
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+/* Учёт Safe Area Insets (Notch / Dynamic Island) для HUD */
+#uiContainer {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* В портретной ориентации на мобильных — поворот на 90° */
+@media (orientation: portrait) and (max-width: 900px) {
+  #gameRoot {
+    width: 100vh;
+    height: 100vw;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(90deg);
+  }
+}
+
+/* ============================================================
+   COMPACT CENTER ALERTS (Mobile)
+   Сообщения не должны закрывать игровое поле.
+   ============================================================ */
+#centerAlertContainer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 8px;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 6px;
+  z-index: 25;
+}
+
+#centerAlertContainer .boss-warning-box,
+#centerAlertContainer #biomeBanner,
+#centerAlertContainer #toastNotification {
+  max-width: 90%;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.6);
+}
+
+#centerAlertContainer .boss-warning-box > div:first-child {
+  font-size: 0.95rem;
+}
+
+#centerAlertContainer #biomeBannerTitle {
+  font-size: 1rem;
+}
+
+#centerAlertContainer #toastNotification {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+}

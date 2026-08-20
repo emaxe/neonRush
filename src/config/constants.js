@@ -33,8 +33,8 @@ export const CONFIG = Object.freeze({
   LEVEL_MAX_SPEED_BONUS: 220, // потолок прибавки скорости
   LEVEL_OBSTACLE_DENSITY: 0.12, // прибавка плотности препятствий за уровень
   LEVEL_MAX_OBSTACLE_DENSITY: 0.6, // потолок плотности
-  LEVEL_BOSS_HP_BONUS: 8, // прибавка HP босса за уровень
-  LEVEL_BOSS_SPEED_BONUS: 0.06, // прибавка к скорости атак босса за уровень
+  LEVEL_BOSS_HP_BONUS: 4, // прибавка HP босса за уровень
+  LEVEL_BOSS_SPEED_BONUS: 0.05, // прибавка к скорости атак босса за уровень
 
   // Powerup durations (seconds)
   MAGNET_DURATION: 8,

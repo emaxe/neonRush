@@ -10,8 +10,8 @@ import { eventBus } from '../core/EventBus.js';
 export class Boss extends Entity {
   constructor() {
     super(0, 300, 130, 95);
-    this.maxHp = 18;
-    this.hp = 18;
+    this.maxHp = 10;
+    this.hp = 10;
     this.active = false;
     this.animTime = 0;
     this.shootTimer = 0;
@@ -25,13 +25,13 @@ export class Boss extends Entity {
     this.x = playerX + 900;
     this.y = 280;
     // HP растёт с уровнем и пройденной дистанцией (смягчённая прогрессия)
-    this.maxHp = 18 + Math.floor(playerX / 20000) * 4 + Math.round((level - 1) * CONFIG.LEVEL_BOSS_HP_BONUS * 0.7);
+    this.maxHp = 10 + Math.floor(playerX / 30000) * 2 + Math.round((level - 1) * CONFIG.LEVEL_BOSS_HP_BONUS * 0.7);
     this.hp = this.maxHp;
     this.level = level;
     this.active = true;
     this.animTime = 0;
-    this.shootTimer = 1.8;
-    this.laserAttackTimer = 6.0;
+    this.shootTimer = 3.0;
+    this.laserAttackTimer = 7.5;
     this.isChargingLaser = false;
     this.phase = 1;
     audioService.setBossMusic(true);
@@ -43,7 +43,7 @@ export class Boss extends Entity {
 
     // Скорость атак растёт с уровнем (интервалы сокращаются)
     const level = this.level || 1;
-    const attackSpeedBonus = 1 + (level - 1) * CONFIG.LEVEL_BOSS_SPEED_BONUS + (this.phase - 1) * 0.15;
+    const attackSpeedBonus = 1 + (level - 1) * CONFIG.LEVEL_BOSS_SPEED_BONUS + (this.phase - 1) * 0.10;
     // Актуальная скорость мира (передаётся из Game.update) — снаряды должны
     // лететь быстрее, чем бежит игрок, на любом уровне разгона
     const worldSpeed = currentSpeed || player.vx;
@@ -65,27 +65,36 @@ export class Boss extends Entity {
     // 1. Regular Attack: Twin Railgun Plasma Volleys
     this.shootTimer -= dt;
     if (this.shootTimer <= 0) {
-      this.shootTimer = 2.5 / attackSpeedBonus;
+      this.shootTimer = 3.2 / attackSpeedBonus;
 
       const playerCenterX = player.x + player.width / 2;
       const playerCenterY = player.y + player.height / 2;
 
       // Projectile relative speed: must travel faster towards the left than the runner runs right
-      const projSpeed = worldSpeed + 200;
+      const projSpeed = worldSpeed + 120 + Math.min(100, (level - 1) * 18);
 
-      // Top Gun
-      const dy1 = playerCenterY - (this.y + 22);
-      const proj1 = levelGen.projectilePool.get();
-      proj1.init(this.x - 5, this.y + 22, -projSpeed, Math.max(-140, Math.min(140, dy1 * 0.8)), '#ff0055', false, 8);
-      levelGen.projectiles.push(proj1);
-      particleSystem.spawnSparks(this.x - 5, this.y + 22, '#ff0055', 4);
+      if (level === 1) {
+        const proj1 = levelGen.projectilePool.get();
+        proj1.init(this.x - 5, this.y + 22, -projSpeed, 0, '#ff0055', false, 8);
+        levelGen.projectiles.push(proj1);
+        particleSystem.spawnSparks(this.x - 5, this.y + 22, '#ff0055', 4);
+      } else {
+        const trackingFactor = level <= 3 ? 0.4 : 0.8;
 
-      // Bottom Gun
-      const dy2 = playerCenterY - (this.y + 72);
-      const proj2 = levelGen.projectilePool.get();
-      proj2.init(this.x - 5, this.y + 72, -projSpeed, Math.max(-140, Math.min(140, dy2 * 0.8)), '#ff0055', false, 8);
-      levelGen.projectiles.push(proj2);
-      particleSystem.spawnSparks(this.x - 5, this.y + 72, '#ff0055', 4);
+        // Top Gun
+        const dy1 = playerCenterY - (this.y + 22);
+        const proj1 = levelGen.projectilePool.get();
+        proj1.init(this.x - 5, this.y + 22, -projSpeed, Math.max(-140, Math.min(140, dy1 * trackingFactor)), '#ff0055', false, 8);
+        levelGen.projectiles.push(proj1);
+        particleSystem.spawnSparks(this.x - 5, this.y + 22, '#ff0055', 4);
+
+        // Bottom Gun
+        const dy2 = playerCenterY - (this.y + 72);
+        const proj2 = levelGen.projectilePool.get();
+        proj2.init(this.x - 5, this.y + 72, -projSpeed, Math.max(-140, Math.min(140, dy2 * trackingFactor)), '#ff0055', false, 8);
+        levelGen.projectiles.push(proj2);
+        particleSystem.spawnSparks(this.x - 5, this.y + 72, '#ff0055', 4);
+      }
 
       audioService.playShoot();
     }
@@ -94,7 +103,7 @@ export class Boss extends Entity {
     this.laserAttackTimer -= dt;
 
     // Charge phase (telegraph warning line + energy vortex)
-    if (this.laserAttackTimer <= 1.2 && !this.isChargingLaser) {
+    if (this.laserAttackTimer <= 1.8 && !this.isChargingLaser) {
       this.isChargingLaser = true;
       audioService.playBossLaser();
     }
@@ -114,12 +123,18 @@ export class Boss extends Entity {
 
     // Fire phase
     if (this.laserAttackTimer <= 0) {
-      this.laserAttackTimer = 8.5 / attackSpeedBonus;
+      this.laserAttackTimer = 12.0 / attackSpeedBonus;
       this.isChargingLaser = false;
 
-      const heavySpeed = worldSpeed + 260;
-      // 5-снарядный веерный залп только на высоких уровнях (level >= 5) И в критической фазе (phase >= 3)
-      const spreadAngles = (level >= 5 && this.phase >= 3) ? [-140, -70, 0, 70, 140] : [-140, 0, 140];
+      const heavySpeed = worldSpeed + 180 + (level - 1) * 20;
+      let spreadAngles;
+      if (level >= 5 && this.phase >= 3) {
+        spreadAngles = [-140, -70, 0, 70, 140];
+      } else if (level >= 3) {
+        spreadAngles = [-140, 0, 140];
+      } else {
+        spreadAngles = [-70, 0, 70];
+      }
 
       for (let i = 0; i < spreadAngles.length; i++) {
         const proj = levelGen.projectilePool.get();
@@ -139,7 +154,7 @@ export class Boss extends Entity {
 
     // Смена фазы при потере HP (75% / 50% / 25% — ускоряет атаки)
     const hpPct = this.hp / this.maxHp;
-    const newPhase = hpPct > 0.5 ? 1 : (hpPct > 0.25 ? 2 : 3);
+    const newPhase = hpPct > 0.6 ? 1 : (hpPct > 0.3 ? 2 : 3);
     if (newPhase !== this.phase) {
       this.phase = newPhase;
       particleSystem.spawnShockwave(this.x, this.y + this.height / 2, '#ff0055', 120, 0.5);

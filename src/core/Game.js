@@ -51,6 +51,8 @@ export class Game {
     this.nextBossDistance = CONFIG.BOSS_INTERVAL;
     this.level = 1; // текущий уровень (растёт после каждого босса)
     this.comboTimer = 0; // таймер спада комбо (сбрасывается при наборе)
+    this.comboFlash = { color: '#00f0ff', alpha: 0, timer: 0, duration: 0.35 };
+    this.lastMilestone = 0; // highest combo threshold crossed this run (3/5/8/10)
 
     this.handlePlayerDeathBound = (reason) => this.handlePlayerDeath(reason);
     this.increaseComboBound = (amt) => this.increaseCombo(amt);
@@ -140,6 +142,9 @@ export class Game {
     this.collisionContext.stats = this.stats;
     this.nextBossDistance = CONFIG.BOSS_INTERVAL;
     this.level = 1;
+    this.comboFlash.timer = 0;
+    this.comboFlash.alpha = 0;
+    this.lastMilestone = 0;
 
     this.levelGen.reset();
     this.player.reset(500);
@@ -244,6 +249,12 @@ export class Game {
     // Slow-mo time scale
     const effectiveDt = this.player.isSlowMo ? dt * 0.55 : dt;
     const player = this.player;
+
+    const cf = this.comboFlash;
+    if (cf.timer > 0) {
+      cf.timer -= effectiveDt;
+      cf.alpha = Math.max(0, 0.35 * (cf.timer / cf.duration));
+    }
 
     // Speed progression (базовая скорость растёт с уровнем)
     const levelSpeedBonus = Math.min(
@@ -365,6 +376,23 @@ export class Game {
     else if (subType === 'ghost') this.player.ghostTimer = CONFIG.GHOST_DURATION;
   }
 
+  _fireComboMilestone(level) {
+    const texts = { 3: 'COMBO x3!', 5: 'COMBO x5!', 8: 'COMBO x8!', 10: 'MAX COMBO x10!' };
+    const colors = { 3: '#00f0ff', 5: '#ffe600', 8: '#ff007f', 10: '#ff0055' };
+    const cx = this.player.x + this.player.width / 2;
+    const cy = this.player.y + this.player.height / 2 - 30;
+    particleSystem.spawnFloatingText(cx, cy, texts[level], colors[level], level === 10 ? 28 : 22);
+    particleSystem.spawnShockwave(cx, cy, colors[level], 80 + level * 14, 0.35);
+    if (level === 10) particleSystem.spawnConfetti(cx, cy, 30);
+    this.camera.shake(3 + level * 0.7, 0.18 + level * 0.03);
+    // Screen flash (reuse object, no alloc)
+    this.comboFlash.color = colors[level];
+    this.comboFlash.alpha = 0.35;
+    this.comboFlash.timer = 0.35 + level * 0.03;
+    this.comboFlash.duration = this.comboFlash.timer;
+    audioService.playComboMilestone(level);
+  }
+
   increaseCombo(amount) {
     this.stats.combo = Math.min(10.0, this.stats.combo + amount);
     this.comboTimer = 0; // сброс таймера спада при наборе комбо
@@ -373,6 +401,15 @@ export class Game {
     }
     questService.updateProgress('max_combo', Math.floor(this.stats.combo));
     achievementService.check(this.stats);
+
+    const newMilestone = this.stats.combo >= 10 ? 10
+      : this.stats.combo >= 8 ? 8
+      : this.stats.combo >= 5 ? 5
+      : this.stats.combo >= 3 ? 3 : 0;
+    if (newMilestone > this.lastMilestone) {
+      this.lastMilestone = newMilestone;
+      this._fireComboMilestone(newMilestone);
+    }
   }
 
   render() {
@@ -423,5 +460,14 @@ export class Game {
 
     // 8. Particles, Shockwaves, Tumbling Debris & Glitch
     particleSystem.draw(ctx, camX, camY);
+
+    const cf = this.comboFlash;
+    if (cf.alpha > 0) {
+      ctx.save();
+      ctx.globalAlpha = cf.alpha;
+      ctx.fillStyle = cf.color;
+      ctx.fillRect(0, 0, CONFIG.CANVAS_BASE_WIDTH, CONFIG.CANVAS_BASE_HEIGHT);
+      ctx.restore();
+    }
   }
 }

@@ -229,6 +229,46 @@ export class AudioService {
     });
   }
 
+  playComboMilestone(level = 3) {
+    if (!this.initialized || !this.ctx) return;
+    this.ensureContext();
+    const now = this.ctx.currentTime;
+    const notes3  = [523.25, 659.25, 783.99];
+    const notes5  = [523.25, 659.25, 783.99, 1046.5];
+    const notes8  = [523.25, 659.25, 783.99, 1046.5, 1318.5];
+    const notes10 = [523.25, 659.25, 783.99, 1046.5, 1318.5, 1568];
+    const notes = level === 10 ? notes10 : level === 8 ? notes8
+                : level === 5 ? notes5 : notes3;
+    const vol = 0.12 + level * 0.025;
+    const type = level >= 8 ? 'sawtooth' : 'triangle';
+    notes.forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, now + i * 0.04);
+      g.gain.setValueAtTime(vol, now + i * 0.04);
+      g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.04 + 0.22);
+      osc.connect(g);
+      g.connect(this.sfxGain);
+      osc.start(now + i * 0.04);
+      osc.stop(now + i * 0.04 + 0.23);
+    });
+    // Sub-bass impact at x10
+    if (level === 10) {
+      const sub = this.ctx.createOscillator();
+      const sg = this.ctx.createGain();
+      sub.type = 'sine';
+      sub.frequency.setValueAtTime(120, now);
+      sub.frequency.exponentialRampToValueAtTime(40, now + 0.2);
+      sg.gain.setValueAtTime(0.4, now);
+      sg.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      sub.connect(sg);
+      sg.connect(this.sfxGain);
+      sub.start(now);
+      sub.stop(now + 0.26);
+    }
+  }
+
   playHit() {
     if (!this.initialized || !this.ctx) return;
     this.ensureContext();

@@ -53,12 +53,16 @@ export class Game {
     this.comboTimer = 0; // таймер спада комбо (сбрасывается при наборе)
     this.comboFlash = { color: '#00f0ff', alpha: 0, timer: 0, duration: 0.35 };
     this.lastMilestone = 0; // highest combo threshold crossed this run (3/5/8/10)
+    this.nearMissStreak = 0; // последовательные near-miss (без пропуска)
+    this.lastNearMissStreakThreshold = 0; // highest streak threshold crossed (2/5/10)
 
     this.handlePlayerDeathBound = (reason) => this.handlePlayerDeath(reason);
     this.increaseComboBound = (amt) => this.increaseCombo(amt);
     this.applyPowerUpBound = (subType) => this.applyPowerUp(subType);
     this.onQuestProgressBound = (type, val) => questService.updateProgress(type, val);
     this.onPerfectLandingBound = (x, y) => this.handlePerfectLanding(x, y);
+    this.onNearMissBound = () => this.handleNearMiss();
+    this.onNearMissStreakBreakBound = () => this.handleNearMissBreak();
 
     this.collisionContext = {
       player: this.player,
@@ -70,7 +74,9 @@ export class Game {
       onIncreaseCombo: this.increaseComboBound,
       onApplyPowerUp: this.applyPowerUpBound,
       onQuestProgress: this.onQuestProgressBound,
-      onPerfectLanding: this.onPerfectLandingBound
+      onPerfectLanding: this.onPerfectLandingBound,
+      onNearMiss: this.onNearMissBound,
+      onNearMissStreakBreak: this.onNearMissStreakBreakBound
     };
 
     this.bindSystemEvents();
@@ -147,6 +153,8 @@ export class Game {
     this.comboFlash.timer = 0;
     this.comboFlash.alpha = 0;
     this.lastMilestone = 0;
+    this.nearMissStreak = 0;
+    this.lastNearMissStreakThreshold = 0;
 
     this.levelGen.reset();
     this.player.reset(500);
@@ -438,6 +446,76 @@ export class Game {
     this.comboFlash.duration = 0.18;
 
     audioService.playCoin(Math.floor(this.stats.combo));
+  }
+
+  /**
+   * Near-Miss: пролёт вплотную мимо препятствия. Накапливает streak;
+   * на порогах (2/5/10) даёт усиленную награду и джус.
+   */
+  handleNearMiss() {
+    this.nearMissStreak++;
+    const streak = this.nearMissStreak;
+    const cx = this.player.x + this.player.width / 2;
+    const cy = this.player.y - 30;
+
+    // Проверяем пороги streak (сверху вниз, чтобы взять самый высокий достигнутый)
+    const thresholds = CONFIG.NEAR_MISS_STREAK_THRESHOLDS;
+    let fired = false;
+    for (let i = thresholds.length - 1; i >= 0; i--) {
+      if (streak >= thresholds[i] && this.lastNearMissStreakThreshold < thresholds[i]) {
+        this.lastNearMissStreakThreshold = thresholds[i];
+        this._fireNearMissStreak(thresholds[i], cx, cy);
+        fired = true;
+        break;
+      }
+    }
+
+    if (!fired) {
+      // Обычный near-miss: комбо + маленький всплывающий текст
+      this.increaseCombo(CONFIG.NEAR_MISS_BASE_COMBO);
+      particleSystem.spawnFloatingText(cx, cy, `NEAR MISS! +${CONFIG.NEAR_MISS_BASE_COMBO}x`, '#00ff66', 13);
+    }
+  }
+
+  /**
+   * Near-Miss Streak Break: препятствие пройдено без near-miss — streak сбрасывается.
+   * Комбо при этом не трогаем (оно живёт по своей механике спада).
+   */
+  handleNearMissBreak() {
+    this.nearMissStreak = 0;
+    this.lastNearMissStreakThreshold = 0;
+  }
+
+  /**
+   * Пороговый джус near-miss streak (x2/x5/x10): очки, комбо, частицы, флеш, тряска, звук.
+   * @param {number} level - достигнутый порог (2/5/10)
+   * @param {number} cx - мировая X-координата центра игрока
+   * @param {number} cy - мировая Y-координата для всплывающего текста
+   */
+  _fireNearMissStreak(level, cx, cy) {
+    const comboBonus = CONFIG.NEAR_MISS_STREAK_COMBO[level];
+    const scoreBonus = CONFIG.NEAR_MISS_STREAK_SCORE[level];
+    this.increaseCombo(comboBonus);
+    this.stats.score += scoreBonus * this.stats.combo;
+
+    const texts = { 2: `STREAK x${level}! +${comboBonus}x`, 5: `STREAK x${level}!! +${comboBonus}x`, 10: `STREAK x${level}!!! +${comboBonus}x` };
+    const colors = { 2: '#00ff66', 5: '#ffe600', 10: '#ff007f' };
+    const color = colors[level];
+
+    particleSystem.spawnFloatingText(cx, cy, texts[level], color, level === 10 ? 26 : 20);
+    particleSystem.spawnShockwave(cx, cy, color, 60 + level * 10, 0.3);
+    if (level >= 5) particleSystem.spawnSparks(cx, cy, color, level === 10 ? 25 : 12);
+    if (level === 10) particleSystem.spawnConfetti(cx, cy, 25);
+
+    this.camera.shake(2 + level * 0.8, 0.12 + level * 0.03);
+
+    // Экранный флеш (reuse comboFlash, zero-alloc)
+    this.comboFlash.color = color;
+    this.comboFlash.alpha = level === 10 ? 0.4 : 0.25;
+    this.comboFlash.timer = 0.25 + level * 0.02;
+    this.comboFlash.duration = this.comboFlash.timer;
+
+    audioService.playNearMissStreak(level);
   }
 
   render() {

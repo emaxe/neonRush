@@ -52,6 +52,13 @@ export const CONFIG = Object.freeze({
   PERFECT_LANDING_COMBO: 0.1,         // прибавка к комбо (+0.1x)
   PERFECT_LANDING_SCORE: 150,         // базовые очки за идеальное приземление
 
+  // Near-Miss Streak: серия последовательных пролётов вплотную мимо препятствий
+  NEAR_MISS_BASE_COMBO: 0.2,            // прибавка к комбо за одиночный near-miss (+0.2x)
+  NEAR_MISS_STREAK_THRESHOLDS: [2, 5, 10], // пороги streak для усиленного джуса/награды
+  NEAR_MISS_STREAK_COMBO: { 2: 0.5, 5: 1.0, 10: 2.0 }, // прибавка комбо на пороге
+  NEAR_MISS_STREAK_SCORE: { 2: 200, 5: 800, 10: 3000 }, // базовые очки на пороге
+  NEAR_MISS_STREAK_BREAK_Y: 120,        // верт. дистанция для проверки сброса streak (чтобы потолочные шипы не сбрасывали)
+
   // Storage key
   STORAGE_KEY: 'neon_rush_save_v2'
 });

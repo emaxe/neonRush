@@ -269,6 +269,44 @@ export class AudioService {
     }
   }
 
+  playNearMissStreak(level = 2) {
+    if (!this.initialized || !this.ctx) return;
+    this.ensureContext();
+    const now = this.ctx.currentTime;
+    const notes2  = [880, 1108.73];
+    const notes5  = [880, 1108.73, 1318.5];
+    const notes10 = [880, 1108.73, 1318.5, 1760];
+    const notes = level === 10 ? notes10 : level === 5 ? notes5 : notes2;
+    const vol = 0.1 + level * 0.02;
+    const type = level >= 5 ? 'sawtooth' : 'triangle';
+    notes.forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, now + i * 0.035);
+      g.gain.setValueAtTime(vol, now + i * 0.035);
+      g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.035 + 0.18);
+      osc.connect(g);
+      g.connect(this.sfxGain);
+      osc.start(now + i * 0.035);
+      osc.stop(now + i * 0.035 + 0.2);
+    });
+    // Sub-bass impact at streak x10
+    if (level >= 10) {
+      const sub = this.ctx.createOscillator();
+      const sg = this.ctx.createGain();
+      sub.type = 'sine';
+      sub.frequency.setValueAtTime(100, now);
+      sub.frequency.exponentialRampToValueAtTime(40, now + 0.2);
+      sg.gain.setValueAtTime(0.35, now);
+      sg.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+      sub.connect(sg);
+      sg.connect(this.sfxGain);
+      sub.start(now);
+      sub.stop(now + 0.25);
+    }
+  }
+
   playHit() {
     if (!this.initialized || !this.ctx) return;
     this.ensureContext();

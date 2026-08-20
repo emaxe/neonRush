@@ -15,6 +15,7 @@ export class Obstacle extends Entity {
     this.laserOn = true;
     this.laserTimer = 0;
     this.nearMissed = false;
+    this.passed = false;
   }
 
   init(x, y, width, height, type) {
@@ -32,6 +33,7 @@ export class Obstacle extends Entity {
     this.laserOn = true;
     this.laserTimer = 0;
     this.nearMissed = false;
+    this.passed = false;
   }
 
   update(dt) {

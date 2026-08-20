@@ -29,7 +29,7 @@ export class CollisionSystem {
    * @param {Object} context
    */
   static resolve(context) {
-    const { player, levelGen, boss, stats, camera, onPlayerDeath, onIncreaseCombo, onApplyPowerUp, onQuestProgress, onPerfectLanding } = context;
+    const { player, levelGen, boss, stats, camera, onPlayerDeath, onIncreaseCombo, onApplyPowerUp, onQuestProgress, onPerfectLanding, onNearMiss, onNearMissStreakBreak } = context;
     const pHitbox = player.getHitbox();
     player.isGrounded = false;
 
@@ -139,11 +139,21 @@ export class CollisionSystem {
         return;
       }
 
-      // Near-Miss combo builder
+      // Near-Miss combo builder (последовательность near-miss = streak, обрабатывается в Game)
       if (!obs.nearMissed && Math.abs((player.x + player.width / 2) - (obs.x + obs.width / 2)) < 50 && Math.abs((player.y + player.height / 2) - (obs.y + obs.height / 2)) < 90) {
         obs.nearMissed = true;
-        onIncreaseCombo(0.2);
-        particleSystem.spawnFloatingText(player.x, player.y - 30, 'NEAR MISS! +0.2x', '#00ff66', 13);
+        if (onNearMiss) onNearMiss();
+      }
+
+      // Streak-Break: препятствие пройдено (ушло за спину) без near-miss — сбрасываем streak.
+      // Вертикальный гейт защищает: потолочный/дальний шип не разрывает streak, т.к. игрок
+      // физически не мог получить near-miss на большой вертикальной дистанции.
+      const yDist = Math.abs((player.y + player.height / 2) - (obs.y + obs.height / 2));
+      if (!obs.passed && yDist < CONFIG.NEAR_MISS_STREAK_BREAK_Y && (obs.x + obs.width < player.x - 20)) {
+        obs.passed = true;
+        if (!obs.nearMissed && onNearMissStreakBreak) {
+          onNearMissStreakBreak();
+        }
       }
     }
 

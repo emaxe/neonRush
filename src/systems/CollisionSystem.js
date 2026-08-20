@@ -1,6 +1,7 @@
 import { audioService } from '../services/AudioService.js';
 import { particleSystem } from './ParticleSystem.js';
 import { storageService } from '../services/StorageService.js';
+import { CONFIG } from '../config/constants.js';
 
 /**
  * CollisionSystem - Evaluates collisions between player, platforms, obstacles, collectibles, and projectiles.
@@ -28,7 +29,7 @@ export class CollisionSystem {
    * @param {Object} context
    */
   static resolve(context) {
-    const { player, levelGen, boss, stats, camera, onPlayerDeath, onIncreaseCombo, onApplyPowerUp, onQuestProgress } = context;
+    const { player, levelGen, boss, stats, camera, onPlayerDeath, onIncreaseCombo, onApplyPowerUp, onQuestProgress, onPerfectLanding } = context;
     const pHitbox = player.getHitbox();
     player.isGrounded = false;
 
@@ -52,6 +53,11 @@ export class CollisionSystem {
             const withinPlatformDepth = currentBottom >= floorTop && currentBottom <= floorTop + plat.height + 40;
 
             if ((crossedSurface || withinPlatformDepth) && player.vy >= 0) {
+              // Perfect Landing: точное приземление на пол после прыжка/падения
+              if (player.airTime >= CONFIG.PERFECT_LANDING_MIN_AIR_TIME && !player.isSliding && !player.isFlipping) {
+                if (onPerfectLanding) onPerfectLanding(player.x + player.width / 2, floorTop);
+              }
+              player.airTime = 0;
               player.y = floorTop - player.height;
               player.vy = 0;
               player.isGrounded = true;
@@ -70,6 +76,11 @@ export class CollisionSystem {
             const withinCeilingDepth = currentTop <= ceilBottom && currentTop >= plat.y - 40;
 
             if ((crossedSurface || withinCeilingDepth) && player.vy <= 0) {
+              // Perfect Landing: точное приземление на потолок после прыжка/падения
+              if (player.airTime >= CONFIG.PERFECT_LANDING_MIN_AIR_TIME && !player.isSliding && !player.isFlipping) {
+                if (onPerfectLanding) onPerfectLanding(player.x + player.width / 2, ceilBottom);
+              }
+              player.airTime = 0;
               player.y = ceilBottom;
               player.vy = 0;
               player.isGrounded = true;

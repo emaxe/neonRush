@@ -58,6 +58,7 @@ export class Game {
     this.increaseComboBound = (amt) => this.increaseCombo(amt);
     this.applyPowerUpBound = (subType) => this.applyPowerUp(subType);
     this.onQuestProgressBound = (type, val) => questService.updateProgress(type, val);
+    this.onPerfectLandingBound = (x, y) => this.handlePerfectLanding(x, y);
 
     this.collisionContext = {
       player: this.player,
@@ -68,7 +69,8 @@ export class Game {
       onPlayerDeath: this.handlePlayerDeathBound,
       onIncreaseCombo: this.increaseComboBound,
       onApplyPowerUp: this.applyPowerUpBound,
-      onQuestProgress: this.onQuestProgressBound
+      onQuestProgress: this.onQuestProgressBound,
+      onPerfectLanding: this.onPerfectLandingBound
     };
 
     this.bindSystemEvents();
@@ -410,6 +412,32 @@ export class Game {
       this.lastMilestone = newMilestone;
       this._fireComboMilestone(newMilestone);
     }
+  }
+
+  /**
+   * Perfect Landing: награда за точное приземление на платформу после прыжка/падения.
+   * Даёт буст комбо, очки и джус (частицы + звук + всплывающий текст).
+   * @param {number} x - мировая X-координата точки приземления
+   * @param {number} y - мировая Y-координата поверхности платформы
+   */
+  handlePerfectLanding(x, y) {
+    this.increaseCombo(CONFIG.PERFECT_LANDING_COMBO);
+    this.stats.score += CONFIG.PERFECT_LANDING_SCORE * this.stats.combo;
+
+    // Всплывающий текст над точкой приземления (с учётом гравитации)
+    const textY = this.player.gravityDir === 1 ? y - 25 : y + 25;
+    particleSystem.spawnFloatingText(x, textY, `PERFECT LANDING! +${CONFIG.PERFECT_LANDING_COMBO}x`, '#00f0ff', 14);
+    particleSystem.spawnSparks(x, y, this.player.skin.trail, 8);
+    particleSystem.spawnShockwave(x, y, '#00f0ff', 55, 0.25);
+    this.camera.shake(2, 0.1);
+
+    // Лёгкий экранный флеш (reuse comboFlash, zero-alloc)
+    this.comboFlash.color = '#00f0ff';
+    this.comboFlash.alpha = 0.18;
+    this.comboFlash.timer = 0.18;
+    this.comboFlash.duration = 0.18;
+
+    audioService.playCoin(Math.floor(this.stats.combo));
   }
 
   render() {

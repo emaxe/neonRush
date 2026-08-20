@@ -47,6 +47,11 @@ export const CONFIG = Object.freeze({
   COMBO_DECAY_TIME: 3.0,   // сек без набора до начала спада
   COMBO_DECAY_RATE: 0.5,   // скорость спада множителя в секунду
 
+  // Perfect Landing: награда за точное приземление на платформу после прыжка/падения
+  PERFECT_LANDING_MIN_AIR_TIME: 0.22, // мин. время в воздухе (сек) для идеального приземления
+  PERFECT_LANDING_COMBO: 0.1,         // прибавка к комбо (+0.1x)
+  PERFECT_LANDING_SCORE: 150,         // базовые очки за идеальное приземление
+
   // Storage key
   STORAGE_KEY: 'neon_rush_save_v2'
 });

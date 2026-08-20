@@ -27,6 +27,7 @@ export class Player extends Entity {
     this.gravityDir = 1; // 1 = floor downward, -1 = ceiling upward
     this.scaleY = 1; // 1 to -1 smooth vertical flip
     this.animTime = 0;
+    this.airTime = 0; // время в воздухе (для Perfect Landing)
 
     // Abilities & Roguelite state
     this.canDoubleJump = true;
@@ -68,6 +69,7 @@ export class Player extends Entity {
     this.gravityDir = 1;
     this.scaleY = 1;
     this.animTime = 0;
+    this.airTime = 0;
     this.canDoubleJump = true;
     this.nitroCharge = 0;
     this.isNitro = false;
@@ -186,6 +188,13 @@ export class Player extends Entity {
 
     this.prevX = this.x;
     this.prevY = this.y;
+
+    // Track air time for Perfect Landing (reset on landing)
+    if (!this.isGrounded) {
+      this.airTime += dt;
+    } else {
+      this.airTime = 0;
+    }
 
     // Gravity physics
     this.vy += CONFIG.WORLD_GRAVITY * this.gravityDir * dt;

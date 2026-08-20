@@ -249,8 +249,6 @@ export class ParticleSystem {
 
       ctx.save();
       ctx.strokeStyle = sw.color;
-      ctx.shadowColor = sw.color;
-      ctx.shadowBlur = 18;
       ctx.lineWidth = Math.max(1, (1 - progress) * 6);
       ctx.globalAlpha = alpha;
 
@@ -275,8 +273,6 @@ export class ParticleSystem {
       ctx.fillStyle = d.color;
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.5;
-      ctx.shadowColor = d.color;
-      ctx.shadowBlur = 10;
 
       ctx.fillRect(-d.w / 2, -d.h / 2, d.w, d.h);
       ctx.strokeRect(-d.w / 2, -d.h / 2, d.w, d.h);
@@ -319,8 +315,6 @@ export class ParticleSystem {
       const progress = t.life / t.maxLife;
       ctx.globalAlpha = 1 - progress;
       ctx.fillStyle = t.color;
-      ctx.shadowColor = t.color;
-      ctx.shadowBlur = 10;
       let cached = this._fontCache.get(t.size);
       if (!cached) {
         cached = `bold ${t.size}px Orbitron, sans-serif`;

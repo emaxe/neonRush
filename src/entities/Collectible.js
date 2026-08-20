@@ -82,8 +82,6 @@ export class Collectible extends Entity {
       grad.addColorStop(1, '#b8860b');
       ctx.fillStyle = grad;
       ctx.strokeStyle = '#fff';
-      ctx.shadowColor = '#ffe600';
-      ctx.shadowBlur = 12;
       ctx.lineWidth = 2;
 
       ctx.beginPath();
@@ -113,8 +111,6 @@ export class Collectible extends Entity {
       grad.addColorStop(1, '#0066aa');
       ctx.fillStyle = grad;
       ctx.strokeStyle = '#ffffff';
-      ctx.shadowColor = '#00f0ff';
-      ctx.shadowBlur = 16;
       ctx.lineWidth = 2.5;
 
       ctx.beginPath();
@@ -154,8 +150,6 @@ export class Collectible extends Entity {
       grad.addColorStop(1, 'rgba(10, 15, 30, 0.9)');
       ctx.fillStyle = grad;
       ctx.strokeStyle = col;
-      ctx.shadowColor = col;
-      ctx.shadowBlur = 15;
       ctx.lineWidth = 2.5;
 
       ctx.beginPath();

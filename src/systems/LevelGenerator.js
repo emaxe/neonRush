@@ -465,8 +465,6 @@ export class LevelGenerator {
 
       // Neon Border - dimmed
       ctx.strokeStyle = p.platformStroke;
-      ctx.shadowColor = p.platformStroke;
-      ctx.shadowBlur = 5;
       ctx.globalAlpha = 0.6;
       ctx.lineWidth = 2;
 
@@ -507,8 +505,6 @@ export class LevelGenerator {
         // Neon pylon with glowing tip - dimmed
         ctx.strokeStyle = d.color;
         ctx.lineWidth = 2;
-        ctx.shadowColor = d.color;
-        ctx.shadowBlur = 4;
         ctx.globalAlpha = 0.5;
         ctx.beginPath();
         ctx.moveTo(screenX, screenY);
@@ -522,7 +518,6 @@ export class LevelGenerator {
         ctx.arc(screenX, screenY - d.height, 3, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1;
-        ctx.shadowBlur = 0;
       } else if (d.type === 'sign') {
         // Hanging neon sign - dimmed
         ctx.strokeStyle = 'rgba(255,255,255,0.1)';
@@ -533,8 +528,6 @@ export class LevelGenerator {
         ctx.stroke();
         ctx.fillStyle = 'rgba(10, 15, 30, 0.6)';
         ctx.strokeStyle = d.color;
-        ctx.shadowColor = d.color;
-        ctx.shadowBlur = 5;
         ctx.globalAlpha = 0.5;
         ctx.lineWidth = 1.5;
         ctx.fillRect(screenX, screenY, d.width, d.height);
@@ -547,7 +540,6 @@ export class LevelGenerator {
         ctx.lineTo(screenX + d.width - 4, screenY + d.height / 2);
         ctx.stroke();
         ctx.globalAlpha = 1;
-        ctx.shadowBlur = 0;
       } else if (d.type === 'shard') {
         // Floating holographic data shard - dimmed
         const bob = Math.sin(now * 0.002 + d.seed) * 8;
@@ -557,8 +549,6 @@ export class LevelGenerator {
         ctx.rotate(rot);
         ctx.strokeStyle = d.color;
         ctx.lineWidth = 1.5;
-        ctx.shadowColor = d.color;
-        ctx.shadowBlur = 4;
         ctx.globalAlpha = 0.4;
         ctx.beginPath();
         ctx.moveTo(0, -d.size);

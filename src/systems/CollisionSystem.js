@@ -108,7 +108,8 @@ export class CollisionSystem {
         if (player.isNitro) {
           obs.active = false;
           levelGen.obstaclePool.release(obs);
-          levelGen.obstacles.splice(i, 1);
+          levelGen.obstacles[i] = levelGen.obstacles[levelGen.obstacles.length - 1];
+          levelGen.obstacles.pop();
           particleSystem.spawnExplosion(obs.x + obs.width / 2, obs.y + obs.height / 2, '#00f0ff', 20);
           camera.shake(6, 0.2);
           stats.score += 300 * stats.combo;
@@ -124,7 +125,8 @@ export class CollisionSystem {
           if (player.shieldCharges <= 0) player.hasShield = false;
           obs.active = false;
           levelGen.obstaclePool.release(obs);
-          levelGen.obstacles.splice(i, 1);
+          levelGen.obstacles[i] = levelGen.obstacles[levelGen.obstacles.length - 1];
+          levelGen.obstacles.pop();
           audioService.playHit();
           camera.shake(10, 0.3);
           particleSystem.spawnExplosion(player.x + player.width / 2, player.y + player.height / 2, '#00f0ff', 30);
@@ -167,7 +169,8 @@ export class CollisionSystem {
       if (dx * dx + dy * dy < rSum * rSum) {
         c.active = false;
         levelGen.collectiblePool.release(c);
-        levelGen.collectibles.splice(i, 1);
+        levelGen.collectibles[i] = levelGen.collectibles[levelGen.collectibles.length - 1];
+        levelGen.collectibles.pop();
 
         if (c.type === 'coin') {
           const coinBonusLvl = storageService.data?.upgrades?.coinBonus || 0;
@@ -217,7 +220,8 @@ export class CollisionSystem {
             boss.takeDamage(1);
             p.active = false;
             levelGen.projectilePool.release(p);
-            levelGen.projectiles.splice(i, 1);
+            levelGen.projectiles[i] = levelGen.projectiles[levelGen.projectiles.length - 1];
+            levelGen.projectiles.pop();
             particleSystem.spawnSparks(p.x, p.y, '#00f0ff', 5);
             continue;
           }
@@ -236,14 +240,16 @@ export class CollisionSystem {
               if (obs.hp <= 0) {
                 obs.active = false;
                 levelGen.obstaclePool.release(obs);
-                levelGen.obstacles.splice(j, 1);
+                levelGen.obstacles[j] = levelGen.obstacles[levelGen.obstacles.length - 1];
+                levelGen.obstacles.pop();
                 particleSystem.spawnExplosion(obs.x + obs.width / 2, obs.y + obs.height / 2, '#ff0055', 20);
                 stats.score += 500 * stats.combo;
                 onIncreaseCombo(0.5);
               }
               p.active = false;
               levelGen.projectilePool.release(p);
-              levelGen.projectiles.splice(i, 1);
+              levelGen.projectiles[i] = levelGen.projectiles[levelGen.projectiles.length - 1];
+              levelGen.projectiles.pop();
               break;
             }
           }
@@ -261,7 +267,8 @@ export class CollisionSystem {
             if (player.shieldCharges <= 0) player.hasShield = false;
             p.active = false;
             levelGen.projectilePool.release(p);
-            levelGen.projectiles.splice(i, 1);
+            levelGen.projectiles[i] = levelGen.projectiles[levelGen.projectiles.length - 1];
+            levelGen.projectiles.pop();
             audioService.playHit();
             camera.shake(8, 0.25);
             particleSystem.spawnExplosion(player.x + player.width / 2, player.y + player.height / 2, '#00f0ff', 25);

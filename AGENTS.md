@@ -2,6 +2,11 @@
 
 This document provides definitive instructions, architecture patterns, and conventions for AI coding assistants (e.g. Antigravity, Claude, Copilot, ChatGPT) and developers modifying or extending the **NEON RUSH** codebase.
 
+> **Global rules for AI agents:** `~/.hermes/agents/rules.md` (code style, Russian
+> comments, zero-asset/WebAudio, commits, host limits, model selection, fallback).
+> Here — only this project's specifics. Cascade: global rules → this file → call
+> instruction.
+
 ---
 
 ## ⚡ 1. Project Mission & Tech Stack
